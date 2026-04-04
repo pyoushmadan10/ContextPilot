@@ -1,0 +1,528 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ContextPilot Dashboard</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+    <style>
+        :root {
+            --bg: #0f1117;
+            --surface: #1a1d27;
+            --surface-hover: #242733;
+            --border: #2a2d3a;
+            --text: #e4e6ec;
+            --text-dim: #8b8fa3;
+            --accent: #6c5ce7;
+            --accent-glow: rgba(108, 92, 231, 0.15);
+            --green: #00d2a0;
+            --green-glow: rgba(0, 210, 160, 0.15);
+            --orange: #ffa502;
+            --orange-glow: rgba(255, 165, 2, 0.15);
+            --red: #ff6b81;
+            --gradient-1: linear-gradient(135deg, #6c5ce7, #a29bfe);
+            --gradient-2: linear-gradient(135deg, #00d2a0, #00b894);
+            --gradient-3: linear-gradient(135deg, #ffa502, #ff7675);
+            --shadow: 0 4px 24px rgba(0,0,0,0.3);
+            --radius: 14px;
+        }
+
+        @media (prefers-color-scheme: light) {
+            :root {
+                --bg: #f0f2f5;
+                --surface: #ffffff;
+                --surface-hover: #f7f8fa;
+                --border: #e0e2e8;
+                --text: #1a1d27;
+                --text-dim: #6b7084;
+                --accent-glow: rgba(108, 92, 231, 0.08);
+                --green-glow: rgba(0, 210, 160, 0.08);
+                --orange-glow: rgba(255, 165, 2, 0.08);
+                --shadow: 0 4px 24px rgba(0,0,0,0.08);
+            }
+        }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+            background: var(--bg);
+            color: var(--text);
+            min-height: 100vh;
+            line-height: 1.5;
+        }
+
+        .header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 20px 32px;
+            border-bottom: 1px solid var(--border);
+            background: var(--surface);
+        }
+
+        .header-left {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .logo {
+            width: 36px;
+            height: 36px;
+            background: var(--gradient-1);
+            border-radius: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 18px;
+            font-weight: 700;
+            color: #fff;
+        }
+
+        .header h1 {
+            font-size: 20px;
+            font-weight: 700;
+            letter-spacing: -0.5px;
+        }
+
+        .header h1 span {
+            color: var(--accent);
+        }
+
+        .status-pill {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            padding: 6px 14px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: 500;
+            background: var(--green-glow);
+            color: var(--green);
+            border: 1px solid rgba(0, 210, 160, 0.2);
+        }
+
+        .status-dot {
+            width: 7px;
+            height: 7px;
+            border-radius: 50%;
+            background: var(--green);
+            animation: pulse 2s ease-in-out infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.4; }
+        }
+
+        .dashboard {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 24px;
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+        }
+
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 16px;
+        }
+
+        .stat-card {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            padding: 20px;
+            box-shadow: var(--shadow);
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+
+        .stat-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 32px rgba(0,0,0,0.4);
+        }
+
+        .stat-card .label {
+            font-size: 12px;
+            font-weight: 500;
+            text-transform: uppercase;
+            letter-spacing: 0.6px;
+            color: var(--text-dim);
+            margin-bottom: 8px;
+        }
+
+        .stat-card .value {
+            font-size: 28px;
+            font-weight: 700;
+            letter-spacing: -1px;
+        }
+
+        .stat-card .sub {
+            font-size: 12px;
+            color: var(--text-dim);
+            margin-top: 4px;
+        }
+
+        .stat-card.accent .value { color: var(--accent); }
+        .stat-card.green .value { color: var(--green); }
+        .stat-card.orange .value { color: var(--orange); }
+
+        .stat-card.accent { border-left: 3px solid var(--accent); }
+        .stat-card.green { border-left: 3px solid var(--green); }
+        .stat-card.orange { border-left: 3px solid var(--orange); }
+
+        .panels {
+            display: grid;
+            grid-template-columns: 2fr 1fr;
+            gap: 20px;
+        }
+
+        .panel {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            padding: 24px;
+            box-shadow: var(--shadow);
+        }
+
+        .panel h2 {
+            font-size: 15px;
+            font-weight: 600;
+            margin-bottom: 16px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .panel h2 .icon {
+            font-size: 16px;
+        }
+
+        .chart-container {
+            position: relative;
+            height: 260px;
+        }
+
+        .file-list {
+            list-style: none;
+        }
+
+        .file-list li {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 10px 0;
+            border-bottom: 1px solid var(--border);
+            font-size: 13px;
+        }
+
+        .file-list li:last-child {
+            border-bottom: none;
+        }
+
+        .file-list .file-name {
+            font-family: 'SF Mono', 'Fira Code', 'Cascadia Code', monospace;
+            font-size: 12px;
+            color: var(--text);
+            max-width: 200px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        .file-list .badge {
+            padding: 2px 8px;
+            border-radius: 10px;
+            font-size: 11px;
+            font-weight: 600;
+            background: var(--accent-glow);
+            color: var(--accent);
+            border: 1px solid rgba(108, 92, 231, 0.2);
+        }
+
+        .index-stats {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 12px;
+        }
+
+        .index-stat {
+            text-align: center;
+            padding: 16px 8px;
+            border-radius: 10px;
+            background: var(--bg);
+        }
+
+        .index-stat .val {
+            font-size: 22px;
+            font-weight: 700;
+            color: var(--accent);
+        }
+
+        .index-stat .lbl {
+            font-size: 11px;
+            color: var(--text-dim);
+            margin-top: 4px;
+        }
+
+        .last-update {
+            text-align: center;
+            font-size: 11px;
+            color: var(--text-dim);
+            padding: 8px;
+        }
+
+        @media (max-width: 768px) {
+            .stats-grid { grid-template-columns: repeat(2, 1fr); }
+            .panels { grid-template-columns: 1fr; }
+            .header { padding: 16px 20px; }
+            .dashboard { padding: 16px; }
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <div class="header-left">
+            <div class="logo">C</div>
+            <h1>Context<span>Pilot</span></h1>
+        </div>
+        <div class="status-pill" id="status">
+            <div class="status-dot"></div>
+            <span>Connecting...</span>
+        </div>
+    </div>
+
+    <div class="dashboard">
+        <!-- Session Stats -->
+        <div class="stats-grid">
+            <div class="stat-card accent">
+                <div class="label">Tokens Sent</div>
+                <div class="value" id="tokens-sent">-</div>
+                <div class="sub" id="tokens-sent-sub"></div>
+            </div>
+            <div class="stat-card green">
+                <div class="label">Tokens Saved</div>
+                <div class="value" id="tokens-saved">-</div>
+                <div class="sub" id="tokens-saved-pct"></div>
+            </div>
+            <div class="stat-card orange">
+                <div class="label">Cost Saved</div>
+                <div class="value" id="cost-saved">-</div>
+                <div class="sub" id="cost-saved-sub"></div>
+            </div>
+            <div class="stat-card">
+                <div class="label">Turns</div>
+                <div class="value" id="turns">-</div>
+                <div class="sub" id="turns-sub"></div>
+            </div>
+        </div>
+
+        <!-- Chart + Files -->
+        <div class="panels">
+            <div class="panel">
+                <h2><span class="icon">&#128202;</span> Tokens per Turn</h2>
+                <div class="chart-container">
+                    <canvas id="chart"></canvas>
+                </div>
+            </div>
+            <div class="panel">
+                <h2><span class="icon">&#128196;</span> Most Accessed Files</h2>
+                <ul class="file-list" id="top-files">
+                    <li><span class="file-name">Loading...</span></li>
+                </ul>
+            </div>
+        </div>
+
+        <!-- Index Stats -->
+        <div class="panel">
+            <h2><span class="icon">&#128451;</span> Index Stats</h2>
+            <div class="index-stats">
+                <div class="index-stat">
+                    <div class="val" id="idx-files">-</div>
+                    <div class="lbl">Files</div>
+                </div>
+                <div class="index-stat">
+                    <div class="val" id="idx-symbols">-</div>
+                    <div class="lbl">Symbols</div>
+                </div>
+                <div class="index-stat">
+                    <div class="val" id="idx-summaries">-</div>
+                    <div class="lbl">Summaries</div>
+                </div>
+            </div>
+        </div>
+
+        <div class="last-update" id="last-update">Waiting for data...</div>
+    </div>
+
+    <script>
+        // ---- State ----
+        let chart = null;
+        const statsUrl = window.location.origin + '/stats';
+
+        // ---- Chart setup ----
+        function initChart() {
+            const ctx = document.getElementById('chart').getContext('2d');
+            const isDark = window.matchMedia('(prefers-color-scheme: dark)').matches ||
+                           getComputedStyle(document.documentElement).getPropertyValue('--bg').trim() === '#0f1117';
+
+            chart = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: [],
+                    datasets: [
+                        {
+                            label: 'Raw',
+                            data: [],
+                            backgroundColor: 'rgba(108, 92, 231, 0.4)',
+                            borderColor: '#6c5ce7',
+                            borderWidth: 1,
+                            borderRadius: 4,
+                        },
+                        {
+                            label: 'Sent',
+                            data: [],
+                            backgroundColor: 'rgba(0, 210, 160, 0.4)',
+                            borderColor: '#00d2a0',
+                            borderWidth: 1,
+                            borderRadius: 4,
+                        }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            position: 'top',
+                            labels: {
+                                color: isDark ? '#8b8fa3' : '#6b7084',
+                                font: { size: 11, family: 'Inter' },
+                                boxWidth: 12,
+                                boxHeight: 12,
+                                borderRadius: 3,
+                            }
+                        }
+                    },
+                    scales: {
+                        x: {
+                            grid: { display: false },
+                            ticks: {
+                                color: isDark ? '#8b8fa3' : '#6b7084',
+                                font: { size: 10 }
+                            }
+                        },
+                        y: {
+                            grid: {
+                                color: isDark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)',
+                            },
+                            ticks: {
+                                color: isDark ? '#8b8fa3' : '#6b7084',
+                                font: { size: 10 },
+                                callback: v => v >= 1000 ? (v/1000).toFixed(1) + 'k' : v
+                            }
+                        }
+                    }
+                }
+            });
+        }
+
+        // ---- Formatting helpers ----
+        function fmtNum(n) {
+            if (n === undefined || n === null) return '-';
+            return n.toLocaleString();
+        }
+
+        function fmtCost(n) {
+            if (n === undefined || n === null) return '-';
+            if (n < 0.01) return '$' + n.toFixed(4);
+            return '$' + n.toFixed(2);
+        }
+
+        // ---- Update UI ----
+        function updateUI(data) {
+            // Session stats
+            const sent = data.tokens_sent || 0;
+            const saved = data.tokens_saved || 0;
+            const raw = data.tokens_raw || 0;
+            const turns = data.turns || 0;
+            const costSaved = data.cost_saved_usd || 0;
+
+            document.getElementById('tokens-sent').textContent = fmtNum(sent);
+            document.getElementById('tokens-sent-sub').textContent = `of ${fmtNum(raw)} raw`;
+
+            document.getElementById('tokens-saved').textContent = fmtNum(saved);
+            const pct = raw > 0 ? ((saved / raw) * 100).toFixed(0) : 0;
+            document.getElementById('tokens-saved-pct').textContent = `${pct}% reduction`;
+
+            document.getElementById('cost-saved').textContent = fmtCost(costSaved);
+            document.getElementById('cost-saved-sub').textContent = 'at $3.00/1M tokens';
+
+            document.getElementById('turns').textContent = fmtNum(turns);
+            const avgPerTurn = turns > 0 ? Math.round(sent / turns) : 0;
+            document.getElementById('turns-sub').textContent = `avg ${fmtNum(avgPerTurn)}/turn`;
+
+            // Chart
+            const perTurn = data.per_turn || [];
+            if (chart && perTurn.length > 0) {
+                chart.data.labels = perTurn.map((_, i) => `T${i + 1}`);
+                chart.data.datasets[0].data = perTurn.map(t => t.tokens_raw);
+                chart.data.datasets[1].data = perTurn.map(t => t.tokens_sent);
+                chart.update('none');
+            }
+
+            // Top files
+            const topFiles = data.top_files || [];
+            const fileList = document.getElementById('top-files');
+            if (topFiles.length > 0) {
+                fileList.innerHTML = topFiles.map(f =>
+                    `<li>
+                        <span class="file-name" title="${f.file_path}">${f.file_path}</span>
+                        <span class="badge">${f.access_count}x</span>
+                    </li>`
+                ).join('');
+            } else {
+                fileList.innerHTML = '<li><span class="file-name" style="color:var(--text-dim)">No files accessed yet</span></li>';
+            }
+
+            // Index stats
+            const idx = data.index || {};
+            document.getElementById('idx-files').textContent = fmtNum(idx.total_files);
+            document.getElementById('idx-symbols').textContent = fmtNum(idx.total_symbols);
+            document.getElementById('idx-summaries').textContent = fmtNum(idx.total_summaries);
+
+            // Status
+            const status = document.getElementById('status');
+            status.innerHTML = '<div class="status-dot"></div><span>Live</span>';
+
+            // Last update
+            document.getElementById('last-update').textContent =
+                'Last updated: ' + new Date().toLocaleTimeString();
+        }
+
+        // ---- Polling ----
+        async function fetchStats() {
+            try {
+                const resp = await fetch(statsUrl);
+                if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+                const data = await resp.json();
+                updateUI(data);
+            } catch (err) {
+                const status = document.getElementById('status');
+                status.innerHTML = '<div class="status-dot" style="background:var(--red);animation:none"></div><span>Disconnected</span>';
+                status.style.background = 'rgba(255,107,129,0.15)';
+                status.style.color = 'var(--red)';
+                status.style.borderColor = 'rgba(255,107,129,0.2)';
+            }
+        }
+
+        // ---- Init ----
+        initChart();
+        fetchStats();
+        setInterval(fetchStats, 3000);
+    </script>
+</body>
+</html>

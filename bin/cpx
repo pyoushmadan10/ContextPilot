@@ -1,0 +1,106 @@
+#!/usr/bin/env bash
+# ContextPilot launcher for Claude Code
+# Usage: cpx [project_path] [initial_prompt]
+#
+# - Kills any stale ctxpilot server for this project
+# - Scans the project
+# - Starts the MCP server in background
+# - Registers with Claude Code
+# - Prints dashboard URL
+# - Launches claude (with optional initial prompt)
+# - On exit: cleans up server process
+
+set -euo pipefail
+
+PROJECT_PATH="${1:-.}"
+INITIAL_PROMPT="${2:-}"
+
+# Resolve absolute path
+PROJECT_PATH="$(cd "$PROJECT_PATH" && pwd)"
+CTXPILOT_DIR="$PROJECT_PATH/.ctxpilot"
+PID_FILE="$CTXPILOT_DIR/server.pid"
+PORT_FILE="$CTXPILOT_DIR/server.port"
+
+echo "╔══════════════════════════════════════════╗"
+echo "║         ContextPilot — Claude Code       ║"
+echo "╚══════════════════════════════════════════╝"
+echo ""
+echo "  Project: $PROJECT_PATH"
+
+# Kill stale server if running
+if [ -f "$PID_FILE" ]; then
+    OLD_PID=$(cat "$PID_FILE")
+    if kill -0 "$OLD_PID" 2>/dev/null; then
+        echo "  Stopping stale server (PID $OLD_PID)..."
+        kill "$OLD_PID" 2>/dev/null || true
+        sleep 1
+    fi
+    rm -f "$PID_FILE" "$PORT_FILE"
+fi
+
+# Ensure .ctxpilot dir exists
+mkdir -p "$CTXPILOT_DIR"
+
+# Start server in background (scanner runs automatically on startup)
+echo "  Starting ContextPilot server..."
+uv run python -m contextpilot.server "$PROJECT_PATH" &
+SERVER_PID=$!
+
+# Wait for port file to appear (server is ready)
+WAIT_SECS=0
+MAX_WAIT=60
+while [ ! -f "$PORT_FILE" ] && [ $WAIT_SECS -lt $MAX_WAIT ]; do
+    sleep 1
+    WAIT_SECS=$((WAIT_SECS + 1))
+    # Check if server died
+    if ! kill -0 "$SERVER_PID" 2>/dev/null; then
+        echo "  ERROR: Server failed to start. Check stderr output."
+        exit 1
+    fi
+done
+
+if [ ! -f "$PORT_FILE" ]; then
+    echo "  ERROR: Server didn't create port file within ${MAX_WAIT}s."
+    kill "$SERVER_PID" 2>/dev/null || true
+    exit 1
+fi
+
+PORT=$(cat "$PORT_FILE")
+MCP_URL="http://localhost:${PORT}/mcp"
+DASHBOARD_URL="http://localhost:${PORT}/dashboard"
+
+echo ""
+echo "  ✓ Server running on port $PORT (PID $SERVER_PID)"
+echo "  ✓ Dashboard: $DASHBOARD_URL"
+echo ""
+
+# Register MCP server with Claude Code
+echo "  Registering MCP server with Claude Code..."
+claude mcp add contextpilot "$MCP_URL" 2>/dev/null || {
+    echo "  Warning: Could not register MCP server with 'claude' CLI."
+    echo "  You may need to add it manually."
+}
+
+# Cleanup function
+cleanup() {
+    echo ""
+    echo "  Stopping ContextPilot server..."
+    if kill -0 "$SERVER_PID" 2>/dev/null; then
+        kill "$SERVER_PID" 2>/dev/null || true
+    fi
+    rm -f "$PID_FILE" "$PORT_FILE"
+    echo "  Done."
+}
+trap cleanup EXIT INT TERM
+
+# Launch Claude Code
+echo ""
+echo "  Launching Claude Code..."
+echo "  ────────────────────────"
+echo ""
+
+if [ -n "$INITIAL_PROMPT" ]; then
+    claude "$INITIAL_PROMPT"
+else
+    claude
+fi

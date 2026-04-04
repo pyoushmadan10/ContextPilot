@@ -1,0 +1,29 @@
+[project]
+name = "contextpilot"
+version = "0.1.0"
+description = "Production-grade MCP CLI tool that gives AI coding assistants surgical, semantic context about a codebase"
+readme = "README.md"
+requires-python = ">=3.12"
+license = { text = "MIT" }
+authors = [{ name = "ContextPilot" }]
+dependencies = [
+    "fastmcp>=3.0",
+    "fastembed",
+    "sqlite-vec",
+    "tree-sitter>=0.25",
+    "tree-sitter-python",
+    "tree-sitter-javascript",
+    "tree-sitter-typescript",
+    "tree-sitter-go",
+    "tiktoken",
+    "xxhash",
+    "cryptography",
+    "pathspec>=1.0.4",
+]
+
+[project.scripts]
+contextpilot = "contextpilot.server:main"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"

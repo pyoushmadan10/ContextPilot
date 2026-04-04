@@ -1,0 +1,92 @@
+#!/usr/bin/env bash
+# ContextPilot launcher for Codex CLI
+# Usage: cpx-codex [project_path] [initial_prompt]
+#
+# Same as cpx but launches codex instead of claude.
+
+set -euo pipefail
+
+PROJECT_PATH="${1:-.}"
+INITIAL_PROMPT="${2:-}"
+
+# Resolve absolute path
+PROJECT_PATH="$(cd "$PROJECT_PATH" && pwd)"
+CTXPILOT_DIR="$PROJECT_PATH/.ctxpilot"
+PID_FILE="$CTXPILOT_DIR/server.pid"
+PORT_FILE="$CTXPILOT_DIR/server.port"
+
+echo "╔══════════════════════════════════════════╗"
+echo "║         ContextPilot — Codex CLI         ║"
+echo "╚══════════════════════════════════════════╝"
+echo ""
+echo "  Project: $PROJECT_PATH"
+
+# Kill stale server if running
+if [ -f "$PID_FILE" ]; then
+    OLD_PID=$(cat "$PID_FILE")
+    if kill -0 "$OLD_PID" 2>/dev/null; then
+        echo "  Stopping stale server (PID $OLD_PID)..."
+        kill "$OLD_PID" 2>/dev/null || true
+        sleep 1
+    fi
+    rm -f "$PID_FILE" "$PORT_FILE"
+fi
+
+mkdir -p "$CTXPILOT_DIR"
+
+echo "  Starting ContextPilot server..."
+uv run python -m contextpilot.server "$PROJECT_PATH" &
+SERVER_PID=$!
+
+WAIT_SECS=0
+MAX_WAIT=60
+while [ ! -f "$PORT_FILE" ] && [ $WAIT_SECS -lt $MAX_WAIT ]; do
+    sleep 1
+    WAIT_SECS=$((WAIT_SECS + 1))
+    if ! kill -0 "$SERVER_PID" 2>/dev/null; then
+        echo "  ERROR: Server failed to start."
+        exit 1
+    fi
+done
+
+if [ ! -f "$PORT_FILE" ]; then
+    echo "  ERROR: Server didn't create port file within ${MAX_WAIT}s."
+    kill "$SERVER_PID" 2>/dev/null || true
+    exit 1
+fi
+
+PORT=$(cat "$PORT_FILE")
+MCP_URL="http://localhost:${PORT}/mcp"
+DASHBOARD_URL="http://localhost:${PORT}/dashboard"
+
+echo ""
+echo "  ✓ Server running on port $PORT (PID $SERVER_PID)"
+echo "  ✓ Dashboard: $DASHBOARD_URL"
+echo ""
+
+echo "  Registering MCP server with Codex CLI..."
+codex mcp add contextpilot "$MCP_URL" 2>/dev/null || {
+    echo "  Warning: Could not register MCP server with 'codex' CLI."
+}
+
+cleanup() {
+    echo ""
+    echo "  Stopping ContextPilot server..."
+    if kill -0 "$SERVER_PID" 2>/dev/null; then
+        kill "$SERVER_PID" 2>/dev/null || true
+    fi
+    rm -f "$PID_FILE" "$PORT_FILE"
+    echo "  Done."
+}
+trap cleanup EXIT INT TERM
+
+echo ""
+echo "  Launching Codex CLI..."
+echo "  ────────────────────────"
+echo ""
+
+if [ -n "$INITIAL_PROMPT" ]; then
+    codex "$INITIAL_PROMPT"
+else
+    codex
+fi
