@@ -255,8 +255,21 @@ async def stats_endpoint(request):
         data = dict(_session_stats.data)
         if _store:
             data["index"] = _store.get_stats()
+            
         if _retriever:
-            data["top_files"] = _retriever.action_graph.get_top_files(5)
+            top_files = []
+            for f in _retriever.action_graph.get_top_files(5):
+                fp = f["file_path"]
+                # Extract filename, cross-platform
+                filename = fp.split('/')[-1].split('\\')[-1]
+                top_files.append({"file": filename, "access_count": f["access_count"]})
+            data["top_files"] = top_files
+
+        # Rename 'per_turn' array to 'turns' and save raw count as 'turns_count'
+        if "per_turn" in data:
+            data["turns_count"] = data.get("turns", 0)
+            data["turns"] = data.pop("per_turn")
+
         return JSONResponse(data)
     return JSONResponse({"error": "No session stats available"})
 

@@ -241,6 +241,22 @@
             background: var(--accent-glow);
             color: var(--accent);
             border: 1px solid rgba(108, 92, 231, 0.2);
+            white-space: nowrap;
+        }
+
+        .file-list .bar-container {
+            flex-grow: 1;
+            margin: 0 16px;
+            height: 6px;
+            background: var(--bg);
+            border-radius: 3px;
+            overflow: hidden;
+        }
+
+        .file-list .bar-fill {
+            height: 100%;
+            background: var(--accent);
+            border-radius: 3px;
         }
 
         .index-stats {
@@ -324,8 +340,10 @@
         <div class="panels">
             <div class="panel">
                 <h2><span class="icon">&#128202;</span> Tokens per Turn</h2>
-                <div class="chart-container">
-                    <canvas id="chart"></canvas>
+                <div class="chart-container" style="overflow-x: auto; overflow-y: hidden;">
+                    <div id="chart-wrapper" style="position: relative; height: 100%; width: 100%; min-width: 100%;">
+                        <canvas id="chart"></canvas>
+                    </div>
                 </div>
             </div>
             <div class="panel">
@@ -360,7 +378,7 @@
 
     <script>
         // ---- State ----
-        let chart = null;
+        let turnChart = null;
         const statsUrl = window.location.origin + '/stats';
 
         // ---- Chart setup ----
@@ -369,24 +387,24 @@
             const isDark = window.matchMedia('(prefers-color-scheme: dark)').matches ||
                            getComputedStyle(document.documentElement).getPropertyValue('--bg').trim() === '#0f1117';
 
-            chart = new Chart(ctx, {
+            turnChart = new Chart(ctx, {
                 type: 'bar',
                 data: {
                     labels: [],
                     datasets: [
                         {
-                            label: 'Raw',
-                            data: [],
-                            backgroundColor: 'rgba(108, 92, 231, 0.4)',
-                            borderColor: '#6c5ce7',
-                            borderWidth: 1,
-                            borderRadius: 4,
-                        },
-                        {
                             label: 'Sent',
                             data: [],
                             backgroundColor: 'rgba(0, 210, 160, 0.4)',
                             borderColor: '#00d2a0',
+                            borderWidth: 1,
+                            borderRadius: 4,
+                        },
+                        {
+                            label: 'Raw',
+                            data: [],
+                            backgroundColor: 'rgba(108, 92, 231, 0.4)',
+                            borderColor: '#6c5ce7',
                             borderWidth: 1,
                             borderRadius: 4,
                         }
@@ -443,12 +461,13 @@
         }
 
         // ---- Update UI ----
-        function updateUI(data) {
+        function updateTokenCards(data) {
             // Session stats
             const sent = data.tokens_sent || 0;
             const saved = data.tokens_saved || 0;
             const raw = data.tokens_raw || 0;
-            const turns = data.turns || 0;
+            const turnsArray = data.turns || [];
+            const turnsCount = turnsArray.length > 0 ? turnsArray.length : (data.turns_count || 0);
             const costSaved = data.cost_saved_usd || 0;
 
             document.getElementById('tokens-sent').textContent = fmtNum(sent);
@@ -461,32 +480,9 @@
             document.getElementById('cost-saved').textContent = fmtCost(costSaved);
             document.getElementById('cost-saved-sub').textContent = 'at $3.00/1M tokens';
 
-            document.getElementById('turns').textContent = fmtNum(turns);
-            const avgPerTurn = turns > 0 ? Math.round(sent / turns) : 0;
+            document.getElementById('turns').textContent = fmtNum(turnsCount);
+            const avgPerTurn = turnsCount > 0 ? Math.round(sent / turnsCount) : 0;
             document.getElementById('turns-sub').textContent = `avg ${fmtNum(avgPerTurn)}/turn`;
-
-            // Chart
-            const perTurn = data.per_turn || [];
-            if (chart && perTurn.length > 0) {
-                chart.data.labels = perTurn.map((_, i) => `T${i + 1}`);
-                chart.data.datasets[0].data = perTurn.map(t => t.tokens_raw);
-                chart.data.datasets[1].data = perTurn.map(t => t.tokens_sent);
-                chart.update('none');
-            }
-
-            // Top files
-            const topFiles = data.top_files || [];
-            const fileList = document.getElementById('top-files');
-            if (topFiles.length > 0) {
-                fileList.innerHTML = topFiles.map(f =>
-                    `<li>
-                        <span class="file-name" title="${f.file_path}">${f.file_path}</span>
-                        <span class="badge">${f.access_count}x</span>
-                    </li>`
-                ).join('');
-            } else {
-                fileList.innerHTML = '<li><span class="file-name" style="color:var(--text-dim)">No files accessed yet</span></li>';
-            }
 
             // Index stats
             const idx = data.index || {};
@@ -503,13 +499,51 @@
                 'Last updated: ' + new Date().toLocaleTimeString();
         }
 
+        function updateTurnChart(turns) {
+            if (!turnChart || !turns || turns.length === 0) return;
+
+            const chartWrapper = document.getElementById('chart-wrapper');
+            if (turns.length > 20) {
+                chartWrapper.style.width = (turns.length * 40) + 'px';
+            } else {
+                chartWrapper.style.width = '100%';
+            }
+
+            turnChart.data.labels = turns.map(t => `Turn ${t.turn}`);
+            turnChart.data.datasets[0].data = turns.map(t => t.tokens_sent);
+            turnChart.data.datasets[1].data = turns.map(t => t.tokens_raw);
+            turnChart.update('none'); // 'none' disables animation on update
+        }
+
+        function updateTopFiles(topFiles) {
+            const fileList = document.getElementById('top-files');
+            if (topFiles && topFiles.length > 0) {
+                const maxCount = Math.max(...topFiles.map(f => f.access_count));
+                fileList.innerHTML = topFiles.map(f => {
+                    const pct = (f.access_count / maxCount) * 100;
+                    return `<li>
+                        <span class="file-name" title="${f.file}">${f.file}</span>
+                        <div class="bar-container"><div class="bar-fill" style="width: ${pct}%"></div></div>
+                        <span class="badge">${f.access_count}x</span>
+                    </li>`;
+                }).join('');
+            } else {
+                fileList.innerHTML = '<li><span class="file-name" style="color:var(--text-dim)">No files accessed yet</span></li>';
+            }
+        }
+
         // ---- Polling ----
-        async function fetchStats() {
+        async function poll() {
             try {
-                const resp = await fetch(statsUrl);
-                if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
-                const data = await resp.json();
-                updateUI(data);
+                const stats = await fetch('/stats').then(r => {
+                    if (!r.ok) throw new Error(`HTTP ${r.status}`);
+                    return r.json();
+                });
+                
+                updateTokenCards(stats);
+                updateTopFiles(stats.top_files);
+                updateTurnChart(stats.turns);
+                
             } catch (err) {
                 const status = document.getElementById('status');
                 status.innerHTML = '<div class="status-dot" style="background:var(--red);animation:none"></div><span>Disconnected</span>';
@@ -521,8 +555,8 @@
 
         // ---- Init ----
         initChart();
-        fetchStats();
-        setInterval(fetchStats, 3000);
+        poll(); // immediate first call
+        setInterval(poll, 3000);
     </script>
 </body>
 </html>
