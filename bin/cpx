@@ -41,37 +41,44 @@ fi
 # Ensure .ctxpilot dir exists
 mkdir -p "$CTXPILOT_DIR"
 
-# Start server in background (scanner runs automatically on startup)
-echo "  Starting ContextPilot server..."
-uv run python -m contextpilot.server "$PROJECT_PATH" &
-SERVER_PID=$!
+# Start server in background completely detached
+echo "  Starting ContextPilot..."
+nohup uv run python -m contextpilot.server "$PROJECT_PATH" \
+  >> "$PROJECT_PATH/.ctxpilot/server.log" 2>&1 &
 
-# Wait for port file to appear (server is ready)
-WAIT_SECS=0
-MAX_WAIT=60
-while [ ! -f "$PORT_FILE" ] && [ $WAIT_SECS -lt $MAX_WAIT ]; do
-    sleep 1
-    WAIT_SECS=$((WAIT_SECS + 1))
-    # Check if server died
-    if ! kill -0 "$SERVER_PID" 2>/dev/null; then
-        echo "  ERROR: Server failed to start. Check stderr output."
-        exit 1
+SERVER_PID=$!
+echo $SERVER_PID > "$CTXPILOT_DIR/server.pid"
+disown $SERVER_PID
+
+# Wait for server to be ready using health endpoint
+MAX_WAIT=15
+WAITED=0
+
+while [ $WAITED -lt $MAX_WAIT ]; do
+  # First check if port file exists so we know what port to curl
+  if [ -f "$PORT_FILE" ]; then
+    PORT=$(cat "$PORT_FILE")
+    if curl -s "http://localhost:$PORT/health" > /dev/null 2>&1; then
+      HEALTH_JSON=$(curl -s "http://localhost:$PORT/health")
+      SYMBOLS_COUNT=$(echo "$HEALTH_JSON" | grep -o '"symbols_indexed": *[0-9]*' | grep -o '[0-9]*')
+      echo "  ContextPilot ready — $SYMBOLS_COUNT symbols indexed"
+      echo "  Dashboard: http://localhost:$PORT/dashboard"
+      break
     fi
+  fi
+  sleep 1
+  WAITED=$((WAITED + 1))
 done
 
-if [ ! -f "$PORT_FILE" ]; then
-    echo "  ERROR: Server didn't create port file within ${MAX_WAIT}s."
-    kill "$SERVER_PID" 2>/dev/null || true
-    exit 1
+if [ $WAITED -eq $MAX_WAIT ]; then
+  echo "  ContextPilot server failed to start. Check .ctxpilot/server.log for details."
+  exit 1
 fi
 
 PORT=$(cat "$PORT_FILE")
 MCP_URL="http://localhost:${PORT}/mcp"
 DASHBOARD_URL="http://localhost:${PORT}/dashboard"
 
-echo ""
-echo "  ✓ Server running on port $PORT (PID $SERVER_PID)"
-echo "  ✓ Dashboard: $DASHBOARD_URL"
 echo ""
 
 # Register MCP server with Claude Code

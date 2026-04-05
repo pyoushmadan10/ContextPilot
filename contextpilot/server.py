@@ -120,7 +120,7 @@ def ctx_continue(query: str) -> dict:
             tokens_sent = compressed["compressed_tokens"]
 
     if _session_stats:
-        _session_stats.record_turn(tokens_raw, tokens_sent)
+        _session_stats.record_turn(tokens_raw, tokens_sent, _retriever.action_graph.turn)
 
     return result
 
@@ -157,6 +157,11 @@ def ctx_retrieve(query: str, top_k: int = 10) -> dict:
             "total_tokens": total_tokens,
             "estimated_cost_usd": estimate_cost_usd(total_tokens),
         }
+        
+        if _session_stats:
+            tokens_sent = total_tokens
+            tokens_raw = tokens_sent * 5  # Estimate
+            _session_stats.record_turn(tokens_raw, tokens_sent, _retriever.action_graph.turn)
 
     return result
 
@@ -181,7 +186,14 @@ def ctx_read(file_path: str, symbol_name: str | None = None) -> dict:
     if _retriever is None:
         return {"error": "Server not initialized. Run scanner first."}
 
-    return _retriever.ctx_read(file_path, symbol_name)
+    result = _retriever.ctx_read(file_path, symbol_name)
+    
+    if _session_stats and not result.get("error"):
+        tokens_sent = result.get("tokens", 0)
+        tokens_raw = tokens_sent * 5  # Estimate
+        _session_stats.record_turn(tokens_raw, tokens_sent, _retriever.action_graph.turn)
+        
+    return result
 
 
 @mcp.tool()
@@ -207,6 +219,31 @@ def ctx_register_edit(file_path: str, summary: str | None = None) -> dict:
 # ---------------------------------------------------------------------------
 # HTTP endpoints (non-MCP)
 # ---------------------------------------------------------------------------
+
+@mcp.custom_route("/health", methods=["GET"])
+async def health_endpoint(request):
+    """Health check for launcher script."""
+    from starlette.responses import JSONResponse
+    
+    symbols_indexed = 0
+    if _store:
+        stats = _store.get_stats()
+        symbols_indexed = stats.get("total_symbols", 0)
+        
+    port_val = getattr(mcp, "port", 8090)
+    try:
+        if _project_root:
+            pf = Path(_project_root) / ".ctxpilot" / "server.port"
+            if pf.exists():
+                port_val = int(pf.read_text().strip())
+    except Exception:
+        pass
+
+    return JSONResponse({
+        "status": "ok",
+        "symbols_indexed": symbols_indexed,
+        "port": port_val
+    })
 
 @mcp.custom_route("/stats", methods=["GET"])
 async def stats_endpoint(request):

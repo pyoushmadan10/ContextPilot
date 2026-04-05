@@ -310,7 +310,6 @@ class SessionSavings:
             "cost_saved_usd": 0.0,
             "per_turn": [],
         }
-        self._load()
 
     def _load(self):
         if self._path.exists():
@@ -328,21 +327,31 @@ class SessionSavings:
         except OSError:
             pass
 
-    def record_turn(self, tokens_raw: int, tokens_sent: int):
+    def record_turn(self, tokens_raw: int, tokens_sent: int, turn_id: int):
         """Record token usage for a turn and persist."""
         saved = max(0, tokens_raw - tokens_sent)
-        self.data["turns"] += 1
+        
+        per_turn = self.data["per_turn"]
+        existing = next((t for t in per_turn if t["turn"] == turn_id), None)
+        
+        if existing:
+            existing["tokens_raw"] += tokens_raw
+            existing["tokens_sent"] += tokens_sent
+            existing["tokens_saved"] += saved
+        else:
+            self.data["turns"] += 1
+            per_turn.append({
+                "turn": turn_id,
+                "tokens_raw": tokens_raw,
+                "tokens_sent": tokens_sent,
+                "tokens_saved": saved,
+                "timestamp": time.time(),
+            })
+            
         self.data["tokens_raw"] += tokens_raw
         self.data["tokens_sent"] += tokens_sent
         self.data["tokens_saved"] += saved
         self.data["cost_saved_usd"] += estimate_cost_usd(saved)
-        self.data["per_turn"].append({
-            "turn": self.data["turns"],
-            "tokens_raw": tokens_raw,
-            "tokens_sent": tokens_sent,
-            "tokens_saved": saved,
-            "timestamp": time.time(),
-        })
         self.save()
 
     @property

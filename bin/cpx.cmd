@@ -40,30 +40,37 @@ REM Ensure .ctxpilot dir exists
 if not exist "%CTXPILOT_DIR%" mkdir "%CTXPILOT_DIR%"
 
 REM Start server in background
-echo   Starting ContextPilot server...
-start /B "ctxpilot-server" uv run python -m contextpilot.server "%PROJECT_PATH%"
+echo   Starting ContextPilot...
+start /B uv run python -m contextpilot.server "%PROJECT_PATH%" >> "%PROJECT_PATH%\.ctxpilot\server.log" 2>&1
 
-REM Wait for port file to appear
+REM Wait for server to be ready
 set WAIT_SECS=0
-set MAX_WAIT=60
+set MAX_WAIT=15
 
 :wait_loop
-if exist "%PORT_FILE%" goto server_ready
+if exist "%PORT_FILE%" (
+    set /p PORT=<"%PORT_FILE%"
+    curl -s "http://localhost:!PORT!/health" >nul 2>&1
+    if not errorlevel 1 goto server_ready
+)
 timeout /t 1 /nobreak >nul
 set /a WAIT_SECS+=1
 if %WAIT_SECS% GEQ %MAX_WAIT% (
-    echo   ERROR: Server didn't start within %MAX_WAIT%s.
+    echo   ContextPilot server failed to start. Check .ctxpilot\server.log for details.
     exit /b 1
 )
 goto wait_loop
 
 :server_ready
-set /p PORT=<"%PORT_FILE%"
+for /f "tokens=*" %%a in ('curl -s "http://localhost:!PORT!/health"') do set HEALTH_JSON=%%a
+for /f "tokens=2 delims=:" %%a in ('echo !HEALTH_JSON! ^| grep -o "\"symbols_indexed\": *[0-9]*"') do set SYMBOLS_COUNT=%%a
+set SYMBOLS_COUNT=!SYMBOLS_COUNT: =!
+
 set "MCP_URL=http://localhost:%PORT%/mcp"
 set "DASHBOARD_URL=http://localhost:%PORT%/dashboard"
 
 echo.
-echo   Server running on port %PORT%
+echo   ContextPilot ready -- !SYMBOLS_COUNT! symbols indexed
 echo   Dashboard: %DASHBOARD_URL%
 echo.
 
