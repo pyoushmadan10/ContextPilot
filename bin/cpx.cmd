@@ -76,7 +76,7 @@ echo.
 
 REM Register MCP server with Claude Code
 echo   Registering MCP server with Claude Code...
-claude mcp add contextpilot "%MCP_URL%" >nul 2>&1
+call claude mcp add contextpilot "%MCP_URL%" >nul 2>&1
 if errorlevel 1 (
     echo   Warning: Could not register MCP server with 'claude' CLI.
 )
@@ -87,9 +87,9 @@ echo   ------------------------------------------------
 echo.
 
 if not "%INITIAL_PROMPT%"=="" (
-    claude "%INITIAL_PROMPT%"
+    call claude "%INITIAL_PROMPT%"
 ) else (
-    claude
+    call claude
 )
 
 REM Cleanup
