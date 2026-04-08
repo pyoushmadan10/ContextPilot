@@ -137,6 +137,20 @@ Codex CLI:
 codex mcp add contextpilot http://localhost:<port>/mcp
 ```
 
+Cursor / Antigravity:
+
+Search for your `mcp_config.json` file, add the following JSON configuration, and refresh in the **Manage MCP servers** tab:
+
+```json
+{
+  "mcpServers": {
+    "localhost-server": {
+      "serverUrl": "http://localhost:<port/mcp"
+    }
+  }
+}
+```
+
 ### 5) Verify runtime endpoints
 
 - Dashboard: `http://localhost:<port>/dashboard`
