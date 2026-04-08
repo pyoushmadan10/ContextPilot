@@ -50,8 +50,8 @@ SERVER_PID=$!
 echo $SERVER_PID > "$CTXPILOT_DIR/server.pid"
 disown $SERVER_PID
 
-# Wait for server to be ready using health endpoint
-MAX_WAIT=15
+# Wait for HTTP server to be reachable (not for scan to complete)
+MAX_WAIT=30
 WAITED=0
 
 while [ $WAITED -lt $MAX_WAIT ]; do
@@ -60,11 +60,13 @@ while [ $WAITED -lt $MAX_WAIT ]; do
     PORT=$(cat "$PORT_FILE")
     if curl -s "http://localhost:$PORT/health" > /dev/null 2>&1; then
       HEALTH_JSON=$(curl -s "http://localhost:$PORT/health")
-      SYMBOLS_COUNT=$(echo "$HEALTH_JSON" | grep -o '"symbols_indexed": *[0-9]*' | grep -o '[0-9]*')
-      echo "  ContextPilot ready — $SYMBOLS_COUNT symbols indexed"
+      echo "  ContextPilot server is up (indexing may continue in background)"
       echo "  Dashboard: http://localhost:$PORT/dashboard"
       break
     fi
+  fi
+  if [ $WAITED -eq 5 ]; then
+    echo "  Waiting for server to start..."
   fi
   sleep 1
   WAITED=$((WAITED + 1))

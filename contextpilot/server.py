@@ -16,6 +16,7 @@ import os
 import signal
 import socket
 import sys
+import threading
 import time
 from pathlib import Path
 
@@ -60,6 +61,8 @@ _session_stats: SessionSavings | None = None
 _cost_guard: CostGuard | None = None
 _compressor: Compressor | None = None
 _project_root: str = ""
+_server_status: str = "initializing"  # initializing → indexing → ready | error
+_server_status_detail: str = ""
 
 # ---------------------------------------------------------------------------
 # FastMCP server
@@ -84,8 +87,8 @@ def ctx_continue(query: str) -> dict:
     Returns:
         Context result with mode, confidence, matching symbols, and token count.
     """
-    if _retriever is None:
-        return {"error": "Server not initialized. Run scanner first."}
+    if _server_status != "ready" or _retriever is None:
+        return {"error": f"Server is still indexing the project ({_server_status}). Please wait a moment and try again."}
 
     result = _retriever.ctx_continue(query)
 
@@ -141,8 +144,8 @@ def ctx_retrieve(query: str, top_k: int = 10) -> dict:
     Returns:
         Retrieval result with primary symbols, summaries, and token counts.
     """
-    if _retriever is None:
-        return {"error": "Server not initialized. Run scanner first."}
+    if _server_status != "ready" or _retriever is None:
+        return {"error": f"Server is still indexing the project ({_server_status}). Please wait a moment and try again."}
 
     result = _retriever.ctx_retrieve(query, top_k)
 
@@ -183,8 +186,8 @@ def ctx_read(file_path: str, symbol_name: str | None = None) -> dict:
     Returns:
         Read result with content, token count, staleness indicator, and budget remaining.
     """
-    if _retriever is None:
-        return {"error": "Server not initialized. Run scanner first."}
+    if _server_status != "ready" or _retriever is None:
+        return {"error": f"Server is still indexing the project ({_server_status}). Please wait a moment and try again."}
 
     result = _retriever.ctx_read(file_path, symbol_name)
     
@@ -210,8 +213,8 @@ def ctx_register_edit(file_path: str, summary: str | None = None) -> dict:
     Returns:
         Edit result with reindex status and symbol count changes.
     """
-    if _retriever is None:
-        return {"error": "Server not initialized. Run scanner first."}
+    if _server_status != "ready" or _retriever is None:
+        return {"error": f"Server is still indexing the project ({_server_status}). Please wait a moment and try again."}
 
     return _retriever.ctx_register_edit(file_path, summary)
 
@@ -227,8 +230,11 @@ async def health_endpoint(request):
     
     symbols_indexed = 0
     if _store:
-        stats = _store.get_stats()
-        symbols_indexed = stats.get("total_symbols", 0)
+        try:
+            stats = _store.get_stats()
+            symbols_indexed = stats.get("total_symbols", 0)
+        except Exception:
+            pass
         
     port_val = getattr(mcp, "port", 8090)
     try:
@@ -240,7 +246,9 @@ async def health_endpoint(request):
         pass
 
     return JSONResponse({
-        "status": "ok",
+        "status": _server_status,
+        "ready": _server_status == "ready",
+        "detail": _server_status_detail,
         "symbols_indexed": symbols_indexed,
         "port": port_val
     })
@@ -290,9 +298,42 @@ async def dashboard_endpoint(request):
 # Server lifecycle
 # ---------------------------------------------------------------------------
 
+def _background_scan(project_root: str, store: VectorStore, ctxpilot_dir: Path):
+    """Run scanning and indexing in a background thread."""
+    global _retriever, _session_stats, _cost_guard, _compressor
+    global _server_status, _server_status_detail
+
+    try:
+        _server_status = "indexing"
+        _server_status_detail = "Scanning project files..."
+        print("[ctxpilot] Running initial scan...", file=sys.stderr)
+
+        scan_result = scan_project(project_root, store)
+        print(
+            f"[ctxpilot] Scan complete: {scan_result.files_indexed} files, "
+            f"{scan_result.symbols_total} symbols in {scan_result.duration_seconds:.2f}s",
+            file=sys.stderr,
+        )
+
+        _server_status_detail = "Initializing retriever..."
+        _retriever = Retriever(store, project_root)
+        _cost_guard = CostGuard()
+        _compressor = Compressor()
+        _session_stats = SessionSavings(ctxpilot_dir)
+
+        _server_status = "ready"
+        _server_status_detail = f"{scan_result.symbols_total} symbols indexed"
+        print("[ctxpilot] Server is ready.", file=sys.stderr)
+
+    except Exception as e:
+        _server_status = "error"
+        _server_status_detail = str(e)
+        print(f"[ctxpilot] Background scan failed: {e}", file=sys.stderr)
+
+
 def main():
-    """Main entry point: scan project, start MCP server."""
-    global _store, _retriever, _session_stats, _cost_guard, _compressor, _project_root
+    """Main entry point: start HTTP server immediately, scan in background."""
+    global _store, _project_root, _server_status, _server_status_detail
 
     if len(sys.argv) < 2:
         print("Usage: python -m contextpilot.server <project_root>", file=sys.stderr)
@@ -308,39 +349,34 @@ def main():
     ctxpilot_dir = Path(_project_root) / ".ctxpilot"
     ctxpilot_dir.mkdir(exist_ok=True)
 
-    # Initialize store
+    # Initialize store (fast — just opens/creates the DB)
     print(f"[ctxpilot] Initializing store for {_project_root}...", file=sys.stderr)
     _store = VectorStore(_project_root)
 
-    # Scan project
-    print("[ctxpilot] Running initial scan...", file=sys.stderr)
-    scan_result = scan_project(_project_root, _store)
-    print(
-        f"[ctxpilot] Scan complete: {scan_result.files_indexed} files, "
-        f"{scan_result.symbols_total} symbols in {scan_result.duration_seconds:.2f}s",
-        file=sys.stderr,
-    )
-
-    # Initialize retriever, cost guard, compressor, and session stats
-    _retriever = Retriever(_store, _project_root)
-    _cost_guard = CostGuard()
-    _compressor = Compressor()
-    _session_stats = SessionSavings(ctxpilot_dir)
-
-    # Find free port
+    # Find free port and write PID/port files BEFORE scanning
     port = _find_free_port()
 
-    # Write PID file
     pid_file = ctxpilot_dir / "server.pid"
     pid_file.write_text(str(os.getpid()), encoding="utf-8")
 
-    # Write port file for launchers
     port_file = ctxpilot_dir / "server.port"
     port_file.write_text(str(port), encoding="utf-8")
 
     print(f"[ctxpilot] Starting MCP server on localhost:{port}...", file=sys.stderr)
     print(f"[ctxpilot] Dashboard: http://localhost:{port}/dashboard", file=sys.stderr)
     print(f"[ctxpilot] Stats API: http://localhost:{port}/stats", file=sys.stderr)
+
+    # Start scanning in background thread
+    _server_status = "initializing"
+    _server_status_detail = "Starting background scan..."
+    scan_thread = threading.Thread(
+        target=_background_scan,
+        args=(_project_root, _store, ctxpilot_dir),
+        daemon=True,
+        name="ctxpilot-scanner",
+    )
+    scan_thread.start()
+    print("[ctxpilot] Background scan started. Server is accepting connections.", file=sys.stderr)
 
     # Cleanup handler
     def _cleanup(signum=None, frame=None):
@@ -358,6 +394,7 @@ def main():
     signal.signal(signal.SIGINT, _cleanup)
     signal.signal(signal.SIGTERM, _cleanup)
 
+    # Start HTTP server immediately — /health is available right away
     try:
         mcp.run(transport="streamable-http", host="localhost", port=port)
     except KeyboardInterrupt:

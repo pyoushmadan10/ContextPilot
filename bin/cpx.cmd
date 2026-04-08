@@ -43,15 +43,18 @@ REM Start server in background
 echo   Starting ContextPilot...
 start /B uv run python -m contextpilot.server "%PROJECT_PATH%" >> "%PROJECT_PATH%\.ctxpilot\server.log" 2>&1
 
-REM Wait for server to be ready
+REM Wait for HTTP server to be reachable (not for scan to complete)
 set WAIT_SECS=0
-set MAX_WAIT=15
+set MAX_WAIT=30
 
 :wait_loop
 if exist "%PORT_FILE%" (
     set /p PORT=<"%PORT_FILE%"
     curl -s "http://localhost:!PORT!/health" >nul 2>&1
     if not errorlevel 1 goto server_ready
+)
+if !WAIT_SECS! GEQ 5 (
+    if !WAIT_SECS! EQU 5 echo   Waiting for server to start...
 )
 timeout /t 1 /nobreak >nul
 set /a WAIT_SECS+=1
@@ -63,14 +66,12 @@ goto wait_loop
 
 :server_ready
 for /f "tokens=*" %%a in ('curl -s "http://localhost:!PORT!/health"') do set HEALTH_JSON=%%a
-for /f "tokens=2 delims=:" %%a in ('echo !HEALTH_JSON! ^| grep -o "\"symbols_indexed\": *[0-9]*"') do set SYMBOLS_COUNT=%%a
-set SYMBOLS_COUNT=!SYMBOLS_COUNT: =!
 
 set "MCP_URL=http://localhost:%PORT%/mcp"
 set "DASHBOARD_URL=http://localhost:%PORT%/dashboard"
 
 echo.
-echo   ContextPilot ready -- !SYMBOLS_COUNT! symbols indexed
+echo   ContextPilot server is up (indexing may continue in background)
 echo   Dashboard: %DASHBOARD_URL%
 echo.
 
