@@ -25,6 +25,16 @@
             --gradient-3: linear-gradient(135deg, #ffa502, #ff7675);
             --shadow: 0 4px 24px rgba(0,0,0,0.3);
             --radius: 14px;
+
+            /* Tier badge colors */
+            --color-background-success: rgba(0, 210, 160, 0.15);
+            --color-text-success: #00d2a0;
+            --color-background-warning: rgba(255, 165, 2, 0.15);
+            --color-text-warning: #ffa502;
+            --color-background-secondary: rgba(139, 143, 163, 0.15);
+            --color-text-secondary: #8b8fa3;
+            --color-background-info: rgba(108, 92, 231, 0.15);
+            --color-text-info: #a29bfe;
         }
 
         @media (prefers-color-scheme: light) {
@@ -39,6 +49,14 @@
                 --green-glow: rgba(0, 210, 160, 0.08);
                 --orange-glow: rgba(255, 165, 2, 0.08);
                 --shadow: 0 4px 24px rgba(0,0,0,0.08);
+                --color-background-success: rgba(0, 180, 130, 0.12);
+                --color-text-success: #00876c;
+                --color-background-warning: rgba(200, 130, 0, 0.12);
+                --color-text-warning: #b37400;
+                --color-background-secondary: rgba(100, 110, 130, 0.10);
+                --color-text-secondary: #6b7084;
+                --color-background-info: rgba(108, 92, 231, 0.10);
+                --color-text-info: #6c5ce7;
             }
         }
 
@@ -115,6 +133,42 @@
             0%, 100% { opacity: 1; }
             50% { opacity: 0.4; }
         }
+
+        /* ---- Tab Navigation ---- */
+        .tab-nav {
+            display: flex;
+            gap: 4px;
+            padding: 12px 32px;
+            background: var(--surface);
+            border-bottom: 1px solid var(--border);
+        }
+
+        .tab-btn {
+            padding: 8px 20px;
+            border-radius: 10px;
+            border: none;
+            background: transparent;
+            color: var(--text-dim);
+            font-size: 13px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+            font-family: inherit;
+        }
+
+        .tab-btn:hover {
+            background: var(--surface-hover);
+            color: var(--text);
+        }
+
+        .tab-btn.active {
+            background: var(--accent-glow);
+            color: var(--accent);
+            border: 1px solid rgba(108, 92, 231, 0.25);
+        }
+
+        .tab-panel { display: none; }
+        .tab-panel.active { display: block; }
 
         .dashboard {
             max-width: 1200px;
@@ -291,11 +345,290 @@
             padding: 8px;
         }
 
+        /* ---- Traversal Tab ---- */
+        .traversal-summary {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 16px;
+            margin-bottom: 20px;
+        }
+
+        .prompt-card {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            box-shadow: var(--shadow);
+            overflow: hidden;
+            transition: opacity 0.2s ease-in;
+        }
+
+        .prompt-card.fade-in {
+            animation: fadeIn 200ms ease-in forwards;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(-8px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .prompt-header {
+            padding: 16px 20px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 12px;
+            transition: background 0.15s;
+            position: relative;
+        }
+
+        .prompt-header:hover {
+            background: var(--surface-hover);
+        }
+
+        .prompt-header-left {
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+            min-width: 0;
+            flex: 1;
+        }
+
+        .prompt-turn-info {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 12px;
+            color: var(--text-dim);
+        }
+
+        .prompt-turn-num {
+            font-weight: 700;
+            color: var(--accent);
+            font-size: 13px;
+        }
+
+        .prompt-preview {
+            font-size: 13px;
+            color: var(--text);
+            font-weight: 500;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .prompt-cost-pills {
+            display: flex;
+            gap: 8px;
+            flex-shrink: 0;
+        }
+
+        .cost-pill {
+            padding: 4px 10px;
+            border-radius: 8px;
+            font-size: 11px;
+            font-weight: 600;
+            white-space: nowrap;
+        }
+
+        .cost-pill.sent {
+            background: var(--color-background-success);
+            color: var(--color-text-success);
+        }
+
+        .cost-pill.raw {
+            background: var(--color-background-secondary);
+            color: var(--color-text-secondary);
+        }
+
+        .prompt-expand-icon {
+            color: var(--text-dim);
+            font-size: 12px;
+            transition: transform 0.2s;
+            flex-shrink: 0;
+        }
+
+        .prompt-card.expanded .prompt-expand-icon {
+            transform: rotate(180deg);
+        }
+
+        /* Hover tooltip */
+        .prompt-header .hover-tooltip {
+            display: none;
+            position: absolute;
+            top: -36px;
+            left: 50%;
+            transform: translateX(-50%);
+            padding: 6px 14px;
+            border-radius: 8px;
+            background: var(--text);
+            color: var(--bg);
+            font-size: 12px;
+            font-weight: 600;
+            white-space: nowrap;
+            z-index: 10;
+            pointer-events: none;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+        }
+
+        .prompt-header .hover-tooltip::after {
+            content: '';
+            position: absolute;
+            bottom: -5px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 0; height: 0;
+            border-left: 5px solid transparent;
+            border-right: 5px solid transparent;
+            border-top: 5px solid var(--text);
+        }
+
+        .prompt-header:hover .hover-tooltip {
+            display: block;
+        }
+
+        .prompt-body {
+            display: none;
+            padding: 0 20px 16px;
+            border-top: 1px solid var(--border);
+        }
+
+        .prompt-card.expanded .prompt-body {
+            display: block;
+        }
+
+        /* File tree inside prompt card */
+        .ctx-file-group {
+            margin-top: 12px;
+        }
+
+        .ctx-file-name {
+            font-family: 'SF Mono', 'Fira Code', 'Cascadia Code', monospace;
+            font-size: 12px;
+            font-weight: 600;
+            color: var(--text);
+            padding: 6px 0 2px;
+        }
+
+        .ctx-symbol-row {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 3px 0 3px 16px;
+            font-size: 12px;
+        }
+
+        .ctx-symbol-icon {
+            font-size: 10px;
+            flex-shrink: 0;
+        }
+
+        .ctx-symbol-name {
+            font-family: 'SF Mono', 'Fira Code', 'Cascadia Code', monospace;
+            font-size: 11px;
+            color: var(--text);
+            min-width: 120px;
+        }
+
+        .tier-badge {
+            padding: 2px 8px;
+            border-radius: 6px;
+            font-size: 10px;
+            font-weight: 600;
+        }
+
+        .tier-badge.primary {
+            background: var(--color-background-success);
+            color: var(--color-text-success);
+        }
+        .tier-badge.summary {
+            background: var(--color-background-warning);
+            color: var(--color-text-warning);
+        }
+        .tier-badge.neighbor {
+            background: var(--color-background-secondary);
+            color: var(--color-text-secondary);
+        }
+        .tier-badge.memory {
+            background: var(--color-background-info);
+            color: var(--color-text-info);
+        }
+
+        .ctx-score {
+            font-size: 11px;
+            color: var(--text-dim);
+            min-width: 40px;
+            text-align: right;
+        }
+
+        .ctx-tokens {
+            font-size: 11px;
+            color: var(--text-dim);
+            min-width: 60px;
+            text-align: right;
+        }
+
+        .excluded-section {
+            margin-top: 16px;
+            padding-top: 12px;
+            border-top: 1px dashed var(--border);
+        }
+
+        .excluded-title {
+            font-size: 11px;
+            font-weight: 600;
+            color: var(--text-dim);
+            margin-bottom: 6px;
+        }
+
+        .excluded-row {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 2px 0;
+            font-size: 11px;
+            color: var(--text-dim);
+        }
+
+        .excluded-row .ex-file {
+            font-family: 'SF Mono', 'Fira Code', 'Cascadia Code', monospace;
+            font-size: 11px;
+        }
+
+        .tier-legend {
+            display: flex;
+            gap: 16px;
+            padding: 12px 0;
+            font-size: 11px;
+            color: var(--text-dim);
+            flex-wrap: wrap;
+        }
+
+        .tier-legend-item {
+            display: flex;
+            align-items: center;
+            gap: 4px;
+        }
+
+        .empty-state {
+            text-align: center;
+            padding: 60px 20px;
+            color: var(--text-dim);
+            font-size: 14px;
+        }
+
+        .traversal-list {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+
         @media (max-width: 768px) {
-            .stats-grid { grid-template-columns: repeat(2, 1fr); }
+            .stats-grid, .traversal-summary { grid-template-columns: repeat(2, 1fr); }
             .panels { grid-template-columns: 1fr; }
             .header { padding: 16px 20px; }
             .dashboard { padding: 16px; }
+            .tab-nav { padding: 10px 20px; }
         }
     </style>
 </head>
@@ -311,64 +644,115 @@
         </div>
     </div>
 
-    <div class="dashboard">
-        <!-- Session Stats -->
-        <div class="stats-grid">
-            <div class="stat-card accent">
-                <div class="label">Tokens Sent</div>
-                <div class="value" id="tokens-sent">-</div>
-                <div class="sub" id="tokens-sent-sub"></div>
-            </div>
-            <div class="stat-card green">
-                <div class="label">Tokens Saved</div>
-                <div class="value" id="tokens-saved">-</div>
-                <div class="sub" id="tokens-saved-pct"></div>
-            </div>
-            <div class="stat-card orange">
-                <div class="label">Cost Saved</div>
-                <div class="value" id="cost-saved">-</div>
-                <div class="sub" id="cost-saved-sub"></div>
-            </div>
-            <div class="stat-card">
-                <div class="label">Turns</div>
-                <div class="value" id="turns">-</div>
-                <div class="sub" id="turns-sub"></div>
-            </div>
-        </div>
+    <!-- Tab Navigation -->
+    <div class="tab-nav">
+        <button class="tab-btn active" data-tab="stats" id="tab-btn-stats">&#128202; Stats</button>
+        <button class="tab-btn" data-tab="traversal" id="tab-btn-traversal">&#128269; Traversal</button>
+    </div>
 
-        <!-- Chart + Files -->
-        <div class="panels">
-            <div class="panel">
-                <h2><span class="icon">&#128202;</span> Tokens per Turn</h2>
-                <div class="chart-container" style="overflow-x: auto; overflow-y: hidden;">
-                    <div id="chart-wrapper" style="position: relative; height: 100%; width: 100%; min-width: 100%;">
-                        <canvas id="chart"></canvas>
+    <div class="dashboard">
+        <!-- ==================== STATS TAB ==================== -->
+        <div class="tab-panel active" id="tab-stats">
+            <!-- Session Stats -->
+            <div class="stats-grid">
+                <div class="stat-card accent">
+                    <div class="label">Tokens Sent</div>
+                    <div class="value" id="tokens-sent">-</div>
+                    <div class="sub" id="tokens-sent-sub"></div>
+                </div>
+                <div class="stat-card green">
+                    <div class="label">Tokens Saved</div>
+                    <div class="value" id="tokens-saved">-</div>
+                    <div class="sub" id="tokens-saved-pct"></div>
+                </div>
+                <div class="stat-card orange">
+                    <div class="label">Cost Saved</div>
+                    <div class="value" id="cost-saved">-</div>
+                    <div class="sub" id="cost-saved-sub"></div>
+                </div>
+                <div class="stat-card">
+                    <div class="label">Turns</div>
+                    <div class="value" id="turns">-</div>
+                    <div class="sub" id="turns-sub"></div>
+                </div>
+            </div>
+
+            <!-- Chart + Files -->
+            <div class="panels" style="margin-top: 20px;">
+                <div class="panel">
+                    <h2><span class="icon">&#128202;</span> Tokens per Prompt</h2>
+                    <div class="chart-container" style="overflow-x: auto; overflow-y: hidden;">
+                        <div id="chart-wrapper" style="position: relative; height: 100%; width: 100%; min-width: 100%;">
+                            <canvas id="chart"></canvas>
+                        </div>
+                    </div>
+                </div>
+                <div class="panel">
+                    <h2><span class="icon">&#128196;</span> Most Accessed Files</h2>
+                    <ul class="file-list" id="top-files">
+                        <li><span class="file-name">Loading...</span></li>
+                    </ul>
+                </div>
+            </div>
+
+            <!-- Index Stats -->
+            <div class="panel" style="margin-top: 20px;">
+                <h2><span class="icon">&#128451;</span> Index Stats</h2>
+                <div class="index-stats">
+                    <div class="index-stat">
+                        <div class="val" id="idx-files">-</div>
+                        <div class="lbl">Files</div>
+                    </div>
+                    <div class="index-stat">
+                        <div class="val" id="idx-symbols">-</div>
+                        <div class="lbl">Symbols</div>
+                    </div>
+                    <div class="index-stat">
+                        <div class="val" id="idx-summaries">-</div>
+                        <div class="lbl">Summaries</div>
                     </div>
                 </div>
             </div>
-            <div class="panel">
-                <h2><span class="icon">&#128196;</span> Most Accessed Files</h2>
-                <ul class="file-list" id="top-files">
-                    <li><span class="file-name">Loading...</span></li>
-                </ul>
-            </div>
         </div>
 
-        <!-- Index Stats -->
-        <div class="panel">
-            <h2><span class="icon">&#128451;</span> Index Stats</h2>
-            <div class="index-stats">
-                <div class="index-stat">
-                    <div class="val" id="idx-files">-</div>
-                    <div class="lbl">Files</div>
+        <!-- ==================== TRAVERSAL TAB ==================== -->
+        <div class="tab-panel" id="tab-traversal">
+            <!-- Summary metrics -->
+            <div class="traversal-summary">
+                <div class="stat-card accent">
+                    <div class="label">Session Cost</div>
+                    <div class="value" id="trav-session-cost">-</div>
+                    <div class="sub">total spent</div>
                 </div>
-                <div class="index-stat">
-                    <div class="val" id="idx-symbols">-</div>
-                    <div class="lbl">Symbols</div>
+                <div class="stat-card">
+                    <div class="label">Without ContextPilot</div>
+                    <div class="value" id="trav-raw-cost">-</div>
+                    <div class="sub">would have been</div>
                 </div>
-                <div class="index-stat">
-                    <div class="val" id="idx-summaries">-</div>
-                    <div class="lbl">Summaries</div>
+                <div class="stat-card green">
+                    <div class="label">Money Saved</div>
+                    <div class="value" id="trav-saved">-</div>
+                    <div class="sub" id="trav-saved-sub"></div>
+                </div>
+                <div class="stat-card orange">
+                    <div class="label">Saving Rate</div>
+                    <div class="value" id="trav-rate">-</div>
+                    <div class="sub">of raw cost</div>
+                </div>
+            </div>
+
+            <!-- Tier legend -->
+            <div class="tier-legend">
+                <div class="tier-legend-item">&#9679; <span class="tier-badge primary">primary</span></div>
+                <div class="tier-legend-item">&#9680; <span class="tier-badge summary">summary</span></div>
+                <div class="tier-legend-item">&#9675; <span class="tier-badge neighbor">neighbor</span></div>
+                <div class="tier-legend-item">&#9672; <span class="tier-badge memory">memory</span></div>
+            </div>
+
+            <!-- Prompt list -->
+            <div class="traversal-list" id="traversal-list">
+                <div class="empty-state" id="traversal-empty">
+                    Send your first prompt to see context traversal here.
                 </div>
             </div>
         </div>
@@ -379,7 +763,18 @@
     <script>
         // ---- State ----
         let turnChart = null;
-        const statsUrl = window.location.origin + '/stats';
+        let renderedTraversalCount = 0;
+        let lastTraversals = []; // cached for chart
+
+        // ---- Tab switching ----
+        document.querySelectorAll('.tab-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+                document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+                btn.classList.add('active');
+                document.getElementById('tab-' + btn.dataset.tab).classList.add('active');
+            });
+        });
 
         // ---- Chart setup ----
         function initChart() {
@@ -423,6 +818,33 @@
                                 boxHeight: 12,
                                 borderRadius: 3,
                             }
+                        },
+                        tooltip: {
+                            callbacks: {
+                                title: function(items) {
+                                    const idx = items[0].dataIndex;
+                                    const t = lastTraversals[idx];
+                                    if (t) return t.prompt_preview || `Turn ${t.turn}`;
+                                    return items[0].label;
+                                },
+                                afterBody: function(items) {
+                                    const idx = items[0].dataIndex;
+                                    const t = lastTraversals[idx];
+                                    if (!t) return '';
+                                    const sent = t.total_tokens_sent || 0;
+                                    const raw = t.total_tokens_raw || 0;
+                                    const costSent = t.cost_this_turn_usd || 0;
+                                    const costRaw = t.cost_raw_would_have_been_usd || 0;
+                                    const saved = costRaw - costSent;
+                                    const pct = costRaw > 0 ? ((saved / costRaw) * 100).toFixed(0) : 0;
+                                    return [
+                                        '',
+                                        `Cost: $${costSent.toFixed(4)}`,
+                                        `Without CP: $${costRaw.toFixed(4)}`,
+                                        `💰 Saved: $${saved.toFixed(4)} (${pct}%)`
+                                    ];
+                                }
+                            }
                         }
                     },
                     scales: {
@@ -430,7 +852,12 @@
                             grid: { display: false },
                             ticks: {
                                 color: isDark ? '#8b8fa3' : '#6b7084',
-                                font: { size: 10 }
+                                font: { size: 10 },
+                                maxRotation: 45,
+                                callback: function(value, index) {
+                                    const label = this.getLabelForValue(value);
+                                    return label.length > 20 ? label.substring(0, 18) + '…' : label;
+                                }
                             }
                         },
                         y: {
@@ -460,9 +887,8 @@
             return '$' + n.toFixed(2);
         }
 
-        // ---- Update UI ----
+        // ---- Update Stats Tab UI ----
         function updateTokenCards(data) {
-            // Session stats
             const sent = data.tokens_sent || 0;
             const saved = data.tokens_saved || 0;
             const raw = data.tokens_raw || 0;
@@ -499,20 +925,39 @@
                 'Last updated: ' + new Date().toLocaleTimeString();
         }
 
-        function updateTurnChart(turns) {
-            if (!turnChart || !turns || turns.length === 0) return;
+        function updateTurnChart(data) {
+            if (!turnChart) return;
 
-            const chartWrapper = document.getElementById('chart-wrapper');
-            if (turns.length > 20) {
-                chartWrapper.style.width = (turns.length * 40) + 'px';
-            } else {
-                chartWrapper.style.width = '100%';
+            const traversals = data.traversals || [];
+            const turns = data.turns || [];
+
+            // Prefer traversals for the chart (prompt-based)
+            if (traversals.length > 0) {
+                lastTraversals = traversals;
+                const chartWrapper = document.getElementById('chart-wrapper');
+                if (traversals.length > 20) {
+                    chartWrapper.style.width = (traversals.length * 50) + 'px';
+                } else {
+                    chartWrapper.style.width = '100%';
+                }
+
+                turnChart.data.labels = traversals.map(t => t.prompt_preview || `Turn ${t.turn}`);
+                turnChart.data.datasets[0].data = traversals.map(t => t.total_tokens_sent || 0);
+                turnChart.data.datasets[1].data = traversals.map(t => t.total_tokens_raw || 0);
+            } else if (turns && turns.length > 0) {
+                // Fallback to per_turn data
+                lastTraversals = [];
+                const chartWrapper = document.getElementById('chart-wrapper');
+                if (turns.length > 20) {
+                    chartWrapper.style.width = (turns.length * 40) + 'px';
+                } else {
+                    chartWrapper.style.width = '100%';
+                }
+                turnChart.data.labels = turns.map(t => `Turn ${t.turn}`);
+                turnChart.data.datasets[0].data = turns.map(t => t.tokens_sent);
+                turnChart.data.datasets[1].data = turns.map(t => t.tokens_raw);
             }
-
-            turnChart.data.labels = turns.map(t => `Turn ${t.turn}`);
-            turnChart.data.datasets[0].data = turns.map(t => t.tokens_sent);
-            turnChart.data.datasets[1].data = turns.map(t => t.tokens_raw);
-            turnChart.update('none'); // 'none' disables animation on update
+            turnChart.update('none');
         }
 
         function updateTopFiles(topFiles) {
@@ -532,6 +977,139 @@
             }
         }
 
+        // ---- Traversal Tab ----
+        function updateTraversalTab(data) {
+            const traversals = data.traversals || [];
+            const sessionCost = data.session_cost_usd || 0;
+            const rawCost = data.session_cost_raw_would_have_been_usd || 0;
+            const moneySaved = rawCost - sessionCost;
+            const savingRate = rawCost > 0 ? ((moneySaved / rawCost) * 100).toFixed(0) : 0;
+
+            // Update summary cards
+            document.getElementById('trav-session-cost').textContent = fmtCost(sessionCost);
+            document.getElementById('trav-raw-cost').textContent = fmtCost(rawCost);
+            document.getElementById('trav-saved').textContent = fmtCost(moneySaved);
+            document.getElementById('trav-saved-sub').textContent =
+                `${fmtNum(Math.round((rawCost - sessionCost) * 1000000 / 3))} tokens`;
+            document.getElementById('trav-rate').textContent = `${savingRate}%`;
+
+            // Empty state
+            const emptyEl = document.getElementById('traversal-empty');
+            const listEl = document.getElementById('traversal-list');
+
+            if (traversals.length === 0) {
+                emptyEl.style.display = 'block';
+                return;
+            }
+            emptyEl.style.display = 'none';
+
+            // Only add new cards (newest first = prepend)
+            if (traversals.length > renderedTraversalCount) {
+                const newItems = traversals.slice(renderedTraversalCount);
+                for (const trav of newItems) {
+                    const card = renderPromptCard(trav);
+                    // Insert after tier legend but before existing cards
+                    if (listEl.children.length <= 1) {
+                        listEl.appendChild(card);
+                    } else {
+                        // Insert after empty state div (index 0)
+                        listEl.insertBefore(card, emptyEl.nextSibling);
+                    }
+                }
+                renderedTraversalCount = traversals.length;
+            }
+        }
+
+        function renderPromptCard(trav) {
+            const card = document.createElement('div');
+            card.className = 'prompt-card fade-in';
+
+            const sent = trav.total_tokens_sent || 0;
+            const raw = trav.total_tokens_raw || 0;
+            const costSent = trav.cost_this_turn_usd || 0;
+            const costRaw = trav.cost_raw_would_have_been_usd || 0;
+            const savedTok = raw - sent;
+            const savedCost = costRaw - costSent;
+            const savePct = raw > 0 ? ((savedTok / raw) * 100).toFixed(0) : 0;
+
+            const ts = trav.timestamp ? new Date(trav.timestamp).toLocaleTimeString() : '';
+
+            // Group context_sent by file
+            const fileGroups = {};
+            (trav.context_sent || []).forEach(item => {
+                const file = item.file || 'unknown';
+                if (!fileGroups[file]) fileGroups[file] = [];
+                fileGroups[file].push(item);
+            });
+
+            const tierIcon = { primary: '●', summary: '◐', neighbor: '○', memory: '◈' };
+
+            let fileTreeHtml = '';
+            for (const [file, items] of Object.entries(fileGroups)) {
+                fileTreeHtml += `<div class="ctx-file-group">
+                    <div class="ctx-file-name">${escapeHtml(file)}</div>`;
+                for (const item of items) {
+                    const icon = tierIcon[item.tier] || '○';
+                    const name = item.symbol || '(file summary)';
+                    const score = item.score !== null && item.score !== undefined ?
+                        item.score.toFixed(2) : '—';
+                    fileTreeHtml += `<div class="ctx-symbol-row">
+                        <span class="ctx-symbol-icon">${icon}</span>
+                        <span class="ctx-symbol-name">${escapeHtml(name)}</span>
+                        <span class="tier-badge ${item.tier}">${item.tier}</span>
+                        <span class="ctx-score">${score}</span>
+                        <span class="ctx-tokens">${fmtNum(item.tokens)} tok</span>
+                    </div>`;
+                }
+                fileTreeHtml += '</div>';
+            }
+
+            // Excluded section
+            let excludedHtml = '';
+            if (trav.context_excluded && trav.context_excluded.length > 0) {
+                excludedHtml = `<div class="excluded-section">
+                    <div class="excluded-title">Excluded (below threshold):</div>`;
+                for (const ex of trav.context_excluded) {
+                    excludedHtml += `<div class="excluded-row">
+                        <span class="ex-file">${escapeHtml(ex.file || '')}</span>
+                        → ${escapeHtml(ex.symbol || '')}
+                        <span>score: ${ex.score !== null ? ex.score.toFixed(2) : '—'}</span>
+                    </div>`;
+                }
+                excludedHtml += '</div>';
+            }
+
+            card.innerHTML = `
+                <div class="prompt-header" onclick="this.parentElement.classList.toggle('expanded')">
+                    <div class="hover-tooltip">Saved: $${savedCost.toFixed(4)} (${fmtNum(savedTok)} tok · ${savePct}%)</div>
+                    <div class="prompt-header-left">
+                        <div class="prompt-turn-info">
+                            <span class="prompt-turn-num">Turn ${trav.turn || '?'}</span>
+                            <span>${ts}</span>
+                        </div>
+                        <div class="prompt-preview">${escapeHtml(trav.prompt_preview || '')}</div>
+                    </div>
+                    <div class="prompt-cost-pills">
+                        <span class="cost-pill sent">Sent: $${costSent.toFixed(4)}</span>
+                        <span class="cost-pill raw">Raw: $${costRaw.toFixed(4)}</span>
+                    </div>
+                    <div class="prompt-expand-icon">▼</div>
+                </div>
+                <div class="prompt-body">
+                    ${fileTreeHtml}
+                    ${excludedHtml}
+                </div>
+            `;
+
+            return card;
+        }
+
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+
         // ---- Polling ----
         async function poll() {
             try {
@@ -539,11 +1117,12 @@
                     if (!r.ok) throw new Error(`HTTP ${r.status}`);
                     return r.json();
                 });
-                
+
                 updateTokenCards(stats);
                 updateTopFiles(stats.top_files);
-                updateTurnChart(stats.turns);
-                
+                updateTurnChart(stats);
+                updateTraversalTab(stats);
+
             } catch (err) {
                 const status = document.getElementById('status');
                 status.innerHTML = '<div class="status-dot" style="background:var(--red);animation:none"></div><span>Disconnected</span>';

@@ -309,6 +309,7 @@ class SessionSavings:
             "tokens_saved": 0,
             "cost_saved_usd": 0.0,
             "per_turn": [],
+            "traversals": [],
         }
 
     def _load(self):
@@ -363,6 +364,31 @@ class SessionSavings:
             "tokens_saved": self.data["tokens_saved"],
             "cost_saved_usd": round(self.data["cost_saved_usd"], 6),
         }
+
+    def record_traversal(self, record: dict):
+        """Append a traversal record, capping at 50 entries."""
+        traversals = self.data.setdefault("traversals", [])
+        traversals.append(record)
+        # Cap at 50 — drop oldest
+        if len(traversals) > 50:
+            self.data["traversals"] = traversals[-50:]
+        self.save()
+
+    @property
+    def session_cost_usd(self) -> float:
+        """Total session cost from traversals."""
+        return sum(
+            t.get("cost_this_turn_usd", 0)
+            for t in self.data.get("traversals", [])
+        )
+
+    @property
+    def session_cost_raw_would_have_been_usd(self) -> float:
+        """What the session would have cost without ContextPilot."""
+        return sum(
+            t.get("cost_raw_would_have_been_usd", 0)
+            for t in self.data.get("traversals", [])
+        )
 
 
 # ---------------------------------------------------------------------------

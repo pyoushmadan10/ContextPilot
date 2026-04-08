@@ -14,6 +14,7 @@ PROJECT_PATH="$(cd "$PROJECT_PATH" && pwd)"
 CTXPILOT_DIR="$PROJECT_PATH/.ctxpilot"
 PID_FILE="$CTXPILOT_DIR/server.pid"
 PORT_FILE="$CTXPILOT_DIR/server.port"
+LOG_FILE="$CTXPILOT_DIR/server.log"
 
 echo "╔══════════════════════════════════════════╗"
 echo "║         ContextPilot — Codex CLI         ║"
@@ -34,25 +35,41 @@ fi
 
 mkdir -p "$CTXPILOT_DIR"
 
-echo "  Starting ContextPilot server..."
-uv run python -m contextpilot.server "$PROJECT_PATH" &
-SERVER_PID=$!
+# Ensure log file exists for tail
+touch "$LOG_FILE"
 
-WAIT_SECS=0
-MAX_WAIT=60
-while [ ! -f "$PORT_FILE" ] && [ $WAIT_SECS -lt $MAX_WAIT ]; do
-    sleep 1
-    WAIT_SECS=$((WAIT_SECS + 1))
-    if ! kill -0 "$SERVER_PID" 2>/dev/null; then
-        echo "  ERROR: Server failed to start."
-        exit 1
+# Start server in background completely detached
+echo "  Starting ContextPilot server..."
+nohup uv run python -m contextpilot.server "$PROJECT_PATH" \
+  >> "$LOG_FILE" 2>&1 &
+
+SERVER_PID=$!
+echo $SERVER_PID > "$CTXPILOT_DIR/server.pid"
+disown $SERVER_PID
+
+# Wait for HTTP server to be reachable
+MAX_WAIT=30
+WAITED=0
+
+while [ $WAITED -lt $MAX_WAIT ]; do
+  if [ -f "$PORT_FILE" ]; then
+    PORT=$(cat "$PORT_FILE")
+    if curl -s "http://localhost:$PORT/health" > /dev/null 2>&1; then
+      echo "  ContextPilot server is up (indexing may continue in background)"
+      echo "  Dashboard: http://localhost:$PORT/dashboard"
+      break
     fi
+  fi
+  if [ $WAITED -eq 5 ]; then
+    echo "  Waiting for server to start..."
+  fi
+  sleep 1
+  WAITED=$((WAITED + 1))
 done
 
-if [ ! -f "$PORT_FILE" ]; then
-    echo "  ERROR: Server didn't create port file within ${MAX_WAIT}s."
-    kill "$SERVER_PID" 2>/dev/null || true
-    exit 1
+if [ $WAITED -eq $MAX_WAIT ]; then
+  echo "  ContextPilot server failed to start. Check .ctxpilot/server.log for details."
+  exit 1
 fi
 
 PORT=$(cat "$PORT_FILE")
@@ -60,20 +77,43 @@ MCP_URL="http://localhost:${PORT}/mcp"
 DASHBOARD_URL="http://localhost:${PORT}/dashboard"
 
 echo ""
-echo "  ✓ Server running on port $PORT (PID $SERVER_PID)"
-echo "  ✓ Dashboard: $DASHBOARD_URL"
-echo ""
 
 echo "  Registering MCP server with Codex CLI..."
 codex mcp add contextpilot "$MCP_URL" 2>/dev/null || {
     echo "  Warning: Could not register MCP server with 'codex' CLI."
 }
 
+# Start tail -f for cost lines in terminal
+TAIL_PID=""
+HAS_COLOR=0
+if command -v tput >/dev/null 2>&1; then
+    COLORS=$(tput colors 2>/dev/null || echo 0)
+    if [ "$COLORS" -ge 8 ] 2>/dev/null; then
+        HAS_COLOR=1
+    fi
+fi
+
+if [ "$HAS_COLOR" -eq 1 ]; then
+    GREEN=$(tput setaf 2)
+    RESET=$(tput sgr0)
+    tail -f "$LOG_FILE" 2>/dev/null | \
+        grep --line-buffered '\[ContextPilot\]' | \
+        sed -u "s/saved \([0-9,]* tok (\$[0-9.]*)\)/${GREEN}saved \1${RESET}/g" &
+    TAIL_PID=$!
+else
+    tail -f "$LOG_FILE" 2>/dev/null | \
+        grep --line-buffered '\[ContextPilot\]' &
+    TAIL_PID=$!
+fi
+
 cleanup() {
     echo ""
     echo "  Stopping ContextPilot server..."
     if kill -0 "$SERVER_PID" 2>/dev/null; then
         kill "$SERVER_PID" 2>/dev/null || true
+    fi
+    if [ -n "$TAIL_PID" ] && kill -0 "$TAIL_PID" 2>/dev/null; then
+        kill "$TAIL_PID" 2>/dev/null || true
     fi
     rm -f "$PID_FILE" "$PORT_FILE"
     echo "  Done."

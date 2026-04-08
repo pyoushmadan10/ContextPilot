@@ -124,6 +124,20 @@ def ctx_continue(query: str) -> dict:
 
     if _session_stats:
         _session_stats.record_turn(tokens_raw, tokens_sent, _retriever.action_graph.turn)
+        # Record traversal if present
+        traversal = result.pop("_traversal", None)
+        if traversal:
+            _session_stats.record_traversal(traversal)
+            # Print cost line to stderr with flush for tail -f
+            saved_tok = traversal.get("total_tokens_raw", 0) - traversal.get("total_tokens_sent", 0)
+            cost_saved = traversal.get("cost_raw_would_have_been_usd", 0) - traversal.get("cost_this_turn_usd", 0)
+            print(
+                f"[ContextPilot] Turn {traversal.get('turn', '?')} \u2014 "
+                f"sent {traversal.get('total_tokens_sent', 0):,} tok "
+                f"(${traversal.get('cost_this_turn_usd', 0):.3f}) \u00b7 "
+                f"saved {saved_tok:,} tok (${cost_saved:.3f})",
+                file=sys.stderr, flush=True,
+            )
 
     return result
 
@@ -165,6 +179,20 @@ def ctx_retrieve(query: str, top_k: int = 10) -> dict:
             tokens_sent = total_tokens
             tokens_raw = tokens_sent * 5  # Estimate
             _session_stats.record_turn(tokens_raw, tokens_sent, _retriever.action_graph.turn)
+            # Record traversal if present
+            traversal = result.pop("_traversal", None)
+            if traversal:
+                _session_stats.record_traversal(traversal)
+                # Print cost line to stderr with flush for tail -f
+                saved_tok = traversal.get("total_tokens_raw", 0) - traversal.get("total_tokens_sent", 0)
+                cost_saved = traversal.get("cost_raw_would_have_been_usd", 0) - traversal.get("cost_this_turn_usd", 0)
+                print(
+                    f"[ContextPilot] Turn {traversal.get('turn', '?')} \u2014 "
+                    f"sent {traversal.get('total_tokens_sent', 0):,} tok "
+                    f"(${traversal.get('cost_this_turn_usd', 0):.3f}) \u00b7 "
+                    f"saved {saved_tok:,} tok (${cost_saved:.3f})",
+                    file=sys.stderr, flush=True,
+                )
 
     return result
 
@@ -277,6 +305,12 @@ async def stats_endpoint(request):
         if "per_turn" in data:
             data["turns_count"] = data.get("turns", 0)
             data["turns"] = data.pop("per_turn")
+
+        # Add traversal cost aggregates
+        data["session_cost_usd"] = round(_session_stats.session_cost_usd, 6)
+        data["session_cost_raw_would_have_been_usd"] = round(
+            _session_stats.session_cost_raw_would_have_been_usd, 6
+        )
 
         return JSONResponse(data)
     return JSONResponse({"error": "No session stats available"})

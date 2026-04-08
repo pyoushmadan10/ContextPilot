@@ -3,12 +3,12 @@
 # Usage: cpx [project_path] [initial_prompt]
 #
 # - Kills any stale ctxpilot server for this project
-# - Scans the project
 # - Starts the MCP server in background
+# - Tails server log for cost lines (prints to terminal)
 # - Registers with Claude Code
 # - Prints dashboard URL
 # - Launches claude (with optional initial prompt)
-# - On exit: cleans up server process
+# - On exit: cleans up server + tail processes
 
 set -euo pipefail
 
@@ -20,6 +20,7 @@ PROJECT_PATH="$(cd "$PROJECT_PATH" && pwd)"
 CTXPILOT_DIR="$PROJECT_PATH/.ctxpilot"
 PID_FILE="$CTXPILOT_DIR/server.pid"
 PORT_FILE="$CTXPILOT_DIR/server.port"
+LOG_FILE="$CTXPILOT_DIR/server.log"
 
 echo "╔══════════════════════════════════════════╗"
 echo "║         ContextPilot — Claude Code       ║"
@@ -41,10 +42,13 @@ fi
 # Ensure .ctxpilot dir exists
 mkdir -p "$CTXPILOT_DIR"
 
+# Ensure log file exists for tail
+touch "$LOG_FILE"
+
 # Start server in background completely detached
 echo "  Starting ContextPilot..."
 nohup uv run python -m contextpilot.server "$PROJECT_PATH" \
-  >> "$PROJECT_PATH/.ctxpilot/server.log" 2>&1 &
+  >> "$LOG_FILE" 2>&1 &
 
 SERVER_PID=$!
 echo $SERVER_PID > "$CTXPILOT_DIR/server.pid"
@@ -90,12 +94,39 @@ claude mcp add contextpilot "$MCP_URL" 2>/dev/null || {
     echo "  You may need to add it manually."
 }
 
+# Start tail -f for cost lines in terminal
+TAIL_PID=""
+HAS_COLOR=0
+if command -v tput >/dev/null 2>&1; then
+    COLORS=$(tput colors 2>/dev/null || echo 0)
+    if [ "$COLORS" -ge 8 ] 2>/dev/null; then
+        HAS_COLOR=1
+    fi
+fi
+
+if [ "$HAS_COLOR" -eq 1 ]; then
+    # Green for savings, reset after
+    GREEN=$(tput setaf 2)
+    RESET=$(tput sgr0)
+    tail -f "$LOG_FILE" 2>/dev/null | \
+        grep --line-buffered '\[ContextPilot\]' | \
+        sed -u "s/saved \([0-9,]* tok (\$[0-9.]*)\)/${GREEN}saved \1${RESET}/g" &
+    TAIL_PID=$!
+else
+    tail -f "$LOG_FILE" 2>/dev/null | \
+        grep --line-buffered '\[ContextPilot\]' &
+    TAIL_PID=$!
+fi
+
 # Cleanup function
 cleanup() {
     echo ""
     echo "  Stopping ContextPilot server..."
     if kill -0 "$SERVER_PID" 2>/dev/null; then
         kill "$SERVER_PID" 2>/dev/null || true
+    fi
+    if [ -n "$TAIL_PID" ] && kill -0 "$TAIL_PID" 2>/dev/null; then
+        kill "$TAIL_PID" 2>/dev/null || true
     fi
     rm -f "$PID_FILE" "$PORT_FILE"
     echo "  Done."

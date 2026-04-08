@@ -14,13 +14,15 @@ import json
 import os
 import sys
 import time
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
 import tiktoken
 
+from contextpilot.cost_guard import estimate_cost_usd
 from contextpilot.embedder import embed_query
-from contextpilot.store import VectorStore
+from contextpilot.store import VectorStore, CTX_PRIMARY_THRESHOLD, CTX_SUMMARY_THRESHOLD
 
 # ---------------------------------------------------------------------------
 # Token counting
@@ -297,6 +299,34 @@ class Retriever:
         self._turn_chars_read = 0
 
     # ------------------------------------------------------------------
+    # Traversal record builder
+    # ------------------------------------------------------------------
+
+    def _build_traversal_record(
+        self,
+        query: str,
+        total_tokens_sent: int,
+        total_tokens_raw: int,
+        context_sent: list[dict],
+        context_excluded: list[dict] | None = None,
+    ) -> dict:
+        """Build a traversal record for session_stats."""
+        preview = query[:60] + ("..." if len(query) > 60 else "")
+        cost_sent = estimate_cost_usd(total_tokens_sent)
+        cost_raw = estimate_cost_usd(total_tokens_raw)
+        return {
+            "turn": self.action_graph.turn,
+            "prompt_preview": preview,
+            "timestamp": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+            "total_tokens_sent": total_tokens_sent,
+            "total_tokens_raw": total_tokens_raw,
+            "cost_this_turn_usd": round(cost_sent, 6),
+            "cost_raw_would_have_been_usd": round(cost_raw, 6),
+            "context_sent": context_sent,
+            "context_excluded": context_excluded or [],
+        }
+
+    # ------------------------------------------------------------------
     # ctx_continue — three-tier resolution
     # ------------------------------------------------------------------
 
@@ -330,15 +360,48 @@ class Retriever:
                 )
 
                 self.action_graph.record_query(query, "memory_first")
+
+                # Build traversal context_sent for memory hits
+                ctx_sent = []
+                for s in symbols[:20]:
+                    tok = count_tokens(s.get("body_preview", ""))
+                    ctx_sent.append({
+                        "file": s.get("file_path", ""),
+                        "symbol": s.get("name"),
+                        "kind": s.get("kind", "function"),
+                        "tier": "memory",
+                        "score": None,
+                        "tokens": tok,
+                        "reason": "action graph hit",
+                    })
+                for n in neighbors:
+                    ntok = count_tokens(n.get("summary", ""))
+                    ctx_sent.append({
+                        "file": n.get("file_path", ""),
+                        "symbol": None,
+                        "kind": "file",
+                        "tier": "neighbor",
+                        "score": None,
+                        "tokens": ntok,
+                        "reason": f"import neighbor of memory file",
+                    })
+
+                tokens_sent = total_tokens + tokens_neighbors
+                tokens_raw = tokens_sent * 5  # Estimate: full-file ~5x
+                traversal = self._build_traversal_record(
+                    query, tokens_sent, tokens_raw, ctx_sent
+                )
+
                 return {
                     "mode": "memory_first",
                     "confidence": "high",
                     "resolution": "action_graph",
                     "symbols": symbols[:20],  # Cap at 20
                     "neighbors": neighbors,
-                    "total_tokens": total_tokens + tokens_neighbors,
+                    "total_tokens": tokens_sent,
                     "tokens_neighbors": tokens_neighbors,
                     "turn": self.action_graph.turn,
+                    "_traversal": traversal,
                 }
 
         # Tier 1: Exact file path match
@@ -396,6 +459,62 @@ class Retriever:
 
         self.action_graph.record_query(query, "semantic_search")
 
+        # Build traversal record
+        ctx_sent = []
+        for s in tiered["primary"]:
+            tok = count_tokens(s.get("body_preview", ""))
+            ctx_sent.append({
+                "file": s.get("file_path", ""),
+                "symbol": s.get("name"),
+                "kind": s.get("kind", "function"),
+                "tier": "primary",
+                "score": round(s.get("distance", 0), 4),
+                "tokens": tok,
+                "reason": f"above primary threshold {CTX_PRIMARY_THRESHOLD}",
+            })
+        for s in tiered["summaries"]:
+            tok = count_tokens(s.get("cliff_notes") or s.get("signature", ""))
+            ctx_sent.append({
+                "file": s.get("file_path", ""),
+                "symbol": s.get("name"),
+                "kind": s.get("kind", "function"),
+                "tier": "summary",
+                "score": round(s.get("distance", 0), 4),
+                "tokens": tok,
+                "reason": f"above summary threshold {CTX_SUMMARY_THRESHOLD}",
+            })
+        for n in neighbors:
+            ntok = count_tokens(n.get("summary", ""))
+            ctx_sent.append({
+                "file": n.get("file_path", ""),
+                "symbol": None,
+                "kind": "file",
+                "tier": "neighbor",
+                "score": None,
+                "tokens": ntok,
+                "reason": f"import neighbor of {n.get('file_path', '')}",
+            })
+
+        # Excluded: results that were dropped by the store's tier search
+        # We can reconstruct approximate exclusions from the raw search
+        ctx_excluded = []
+        raw_results = self.store.search(query_vector, top_k)
+        for r in raw_results:
+            dist = r.get("distance", 999)
+            if dist > CTX_SUMMARY_THRESHOLD:
+                ctx_excluded.append({
+                    "file": r.get("file_path", ""),
+                    "symbol": r.get("name"),
+                    "score": round(dist, 4),
+                    "reason": f"below summary threshold {CTX_SUMMARY_THRESHOLD}",
+                })
+
+        tokens_sent = primary_tokens + summary_tokens + tokens_neighbors
+        tokens_raw = tokens_sent * 5  # Estimate: full-file ~5x
+        traversal = self._build_traversal_record(
+            query, tokens_sent, tokens_raw, ctx_sent, ctx_excluded
+        )
+
         return {
             "mode": "semantic_search",
             "confidence": "medium" if tiered["primary"] else "low",
@@ -403,12 +522,13 @@ class Retriever:
             "symbols": tiered["primary"],
             "summaries": tiered["summaries"],
             "neighbors": neighbors,
-            "total_tokens": primary_tokens + summary_tokens + tokens_neighbors,
+            "total_tokens": tokens_sent,
             "tokens_primary": primary_tokens,
             "tokens_summary": summary_tokens,
             "tokens_neighbors": tokens_neighbors,
             "dropped": tiered["dropped"],
             "turn": self.action_graph.turn,
+            "_traversal": traversal,
         }
 
     # ------------------------------------------------------------------

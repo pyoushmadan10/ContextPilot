@@ -21,6 +21,7 @@ popd
 set "CTXPILOT_DIR=%PROJECT_PATH%\.ctxpilot"
 set "PID_FILE=%CTXPILOT_DIR%\server.pid"
 set "PORT_FILE=%CTXPILOT_DIR%\server.port"
+set "LOG_FILE=%CTXPILOT_DIR%\server.log"
 
 echo ================================================
 echo          ContextPilot -- Claude Code
@@ -39,9 +40,12 @@ if exist "%PID_FILE%" (
 REM Ensure .ctxpilot dir exists
 if not exist "%CTXPILOT_DIR%" mkdir "%CTXPILOT_DIR%"
 
+REM Ensure log file exists for tail
+if not exist "%LOG_FILE%" type nul > "%LOG_FILE%"
+
 REM Start server in background
 echo   Starting ContextPilot...
-start /B uv run python -m contextpilot.server "%PROJECT_PATH%" >> "%PROJECT_PATH%\.ctxpilot\server.log" 2>&1
+start /B uv run python -m contextpilot.server "%PROJECT_PATH%" >> "%LOG_FILE%" 2>&1
 
 REM Wait for HTTP server to be reachable (not for scan to complete)
 set WAIT_SECS=0
@@ -82,6 +86,15 @@ if errorlevel 1 (
     echo   Warning: Could not register MCP server with 'claude' CLI.
 )
 
+REM Start tail for cost lines in terminal (PowerShell Get-Content -Wait)
+set "TAIL_PID_FILE=%CTXPILOT_DIR%\tail.pid"
+start /B powershell -NoProfile -Command "$host.UI.RawUI.WindowTitle='cpx-tail'; Get-Content -Path '%LOG_FILE%' -Wait -Tail 0 | Select-String '\[ContextPilot\]' | ForEach-Object { Write-Host $_.Line }" >nul 2>&1
+
+REM Capture tail's PID (last started background process)
+for /f "tokens=2" %%p in ('wmic process where "commandline like '%%cpx-tail%%' and name='powershell.exe'" get processid 2^>nul ^| findstr /r "[0-9]"') do (
+    echo %%p > "%TAIL_PID_FILE%"
+)
+
 echo.
 echo   Launching Claude Code...
 echo   ------------------------------------------------
@@ -101,6 +114,14 @@ if exist "%PID_FILE%" (
     taskkill /PID !SRV_PID! /F >nul 2>&1
     del /f "%PID_FILE%" "%PORT_FILE%" >nul 2>&1
 )
+REM Kill tail process
+if exist "%TAIL_PID_FILE%" (
+    set /p TAIL_PID=<"%TAIL_PID_FILE%"
+    taskkill /PID !TAIL_PID! /F >nul 2>&1
+    del /f "%TAIL_PID_FILE%" >nul 2>&1
+)
+REM Also kill by window title as fallback
+taskkill /FI "WINDOWTITLE eq cpx-tail" /F >nul 2>&1
 echo   Done.
 
 endlocal
