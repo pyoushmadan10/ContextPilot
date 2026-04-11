@@ -216,6 +216,7 @@ class ActionGraph:
 
 # Per-turn read budget (chars)
 CTX_READ_BUDGET = int(os.environ.get("CTX_READ_BUDGET", "18000"))
+CTX_TURN_GAP_SECONDS = float(os.environ.get("CTX_TURN_GAP_SECONDS", "3.0"))
 
 
 def expand_with_imports(
@@ -292,27 +293,27 @@ class Retriever:
         self.project_root = Path(project_root).resolve()
         self.action_graph = ActionGraph(self.store.ctxpilot_dir)
         self._turn_chars_read = 0
-        self._continue_called_this_turn = False
+        self._last_tool_call_at = 0.0
+        self._turn_gap = CTX_TURN_GAP_SECONDS
 
     def new_turn(self):
         """Start a new turn — reset per-turn budgets."""
         self.action_graph.new_turn()
         self._turn_chars_read = 0
-        self._continue_called_this_turn = False
 
-    def ensure_turn_advanced(self):
-        """Ensure the turn counter has been advanced for this prompt.
+    def maybe_increment_turn(self):
+        """Increment the turn counter if enough time has elapsed.
 
-        Called by ctx_retrieve / ctx_read / ctx_register_edit so that even
-        if the AI agent skipped ctx_continue, the turn still increments.
+        Called at the top of every MCP tool. If the gap between now and
+        the previous tool call exceeds CTX_TURN_GAP_SECONDS (default 3s),
+        we treat this as a new user prompt and advance the turn.
         """
-        if not self._continue_called_this_turn:
+        now = time.time()
+        gap = now - self._last_tool_call_at
+        self._last_tool_call_at = now
+
+        if gap > self._turn_gap:
             self.new_turn()
-            print(
-                f"[ctxpilot] Warning: ctx_continue was not called this turn. "
-                f"Auto-advancing to turn {self.action_graph.turn}.",
-                file=sys.stderr, flush=True,
-            )
 
     # ------------------------------------------------------------------
     # Traversal record builder
@@ -356,8 +357,7 @@ class Retriever:
 
         Returns ContextResult dict.
         """
-        self.new_turn()
-        self._continue_called_this_turn = True
+        self.maybe_increment_turn()
 
         # Tier 0: Check action graph memory
         memory_files = self.action_graph.find_matching_files(query)
@@ -557,7 +557,7 @@ class Retriever:
 
         Returns RetrievalResult dict.
         """
-        self.ensure_turn_advanced()
+        self.maybe_increment_turn()
         query_vector = embed_query(query)
         tiered = self.store.search_with_tiers(query_vector, top_k)
 
@@ -608,7 +608,7 @@ class Retriever:
 
         Returns ReadResult dict.
         """
-        self.ensure_turn_advanced()
+        self.maybe_increment_turn()
         abs_path = self.project_root / file_path
 
         if not abs_path.exists():
@@ -719,7 +719,7 @@ class Retriever:
 
         Returns edit result dict.
         """
-        self.ensure_turn_advanced()
+        self.maybe_increment_turn()
         from contextpilot.scanner import scan_file
 
         self.action_graph.record_edit(file_path, summary)

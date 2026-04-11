@@ -81,9 +81,16 @@ echo.
 
 REM Register MCP server with Claude Code
 echo   Registering MCP server with Claude Code...
-call claude mcp add contextpilot "%MCP_URL%" >nul 2>&1
+call claude mcp add --transport http contextpilot "%MCP_URL%" >nul 2>&1
 if errorlevel 1 (
-    echo   Warning: Could not register MCP server with 'claude' CLI.
+    echo.
+    echo   WARNING: Could not auto-register MCP server with 'claude' CLI.
+    echo   Run this command manually to register:
+    echo.
+    echo     claude mcp add --transport http contextpilot %MCP_URL%
+    echo.
+) else (
+    echo   MCP server registered successfully.
 )
 
 REM Start tail for cost lines in terminal (PowerShell Get-Content -Wait)

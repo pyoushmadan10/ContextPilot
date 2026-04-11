@@ -79,9 +79,16 @@ DASHBOARD_URL="http://localhost:${PORT}/dashboard"
 echo ""
 
 echo "  Registering MCP server with Codex CLI..."
-codex mcp add contextpilot "$MCP_URL" 2>/dev/null || {
-    echo "  Warning: Could not register MCP server with 'codex' CLI."
-}
+if codex mcp add --transport http contextpilot "$MCP_URL" 2>/dev/null; then
+    echo "  MCP server registered successfully."
+else
+    echo ""
+    echo "  ⚠  Could not auto-register MCP server with 'codex' CLI."
+    echo "  Run this command manually to register:"
+    echo ""
+    echo "    codex mcp add --transport http contextpilot $MCP_URL"
+    echo ""
+fi
 
 # Start tail -f for cost lines in terminal
 TAIL_PID=""

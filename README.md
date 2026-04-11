@@ -128,14 +128,16 @@ On startup ContextPilot will:
 Claude CLI:
 
 ```bash
-claude mcp add contextpilot http://localhost:<port>/mcp
+claude mcp add --transport http contextpilot http://localhost:<port>/mcp
 ```
 
 Codex CLI:
 
 ```bash
-codex mcp add contextpilot http://localhost:<port>/mcp
+codex mcp add --transport http contextpilot http://localhost:<port>/mcp
 ```
+
+> **Note:** The `--transport http` flag is required because ContextPilot uses streamable-http transport, not stdio. Without it, the CLI defaults to stdio and the connection will fail.
 
 Cursor / Antigravity:
 
@@ -246,6 +248,7 @@ All settings are configurable via environment variables:
 | `CTX_WARN_THRESHOLD` | `15000` | Tokens before showing cost warning |
 | `CTX_HARD_LIMIT` | `30000` | Tokens before auto-compress |
 | `CTX_READ_BUDGET` | `18000` | Max chars per turn for ctx_read |
+| `CTX_TURN_GAP_SECONDS` | `3.0` | Seconds of silence before a new turn is detected |
 | `CTX_MAX_FILE_SIZE` | `512000` | Max file size to index (bytes) |
 | `CTX_COMPRESS_BUDGET` | `15000` | Target tokens after compression |
 

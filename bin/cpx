@@ -89,10 +89,16 @@ echo ""
 
 # Register MCP server with Claude Code
 echo "  Registering MCP server with Claude Code..."
-claude mcp add contextpilot "$MCP_URL" 2>/dev/null || {
-    echo "  Warning: Could not register MCP server with 'claude' CLI."
-    echo "  You may need to add it manually."
-}
+if claude mcp add --transport http contextpilot "$MCP_URL" 2>/dev/null; then
+    echo "  MCP server registered successfully."
+else
+    echo ""
+    echo "  ⚠  Could not auto-register MCP server with 'claude' CLI."
+    echo "  Run this command manually to register:"
+    echo ""
+    echo "    claude mcp add --transport http contextpilot $MCP_URL"
+    echo ""
+fi
 
 # Start tail -f for cost lines in terminal
 TAIL_PID=""
