@@ -6,11 +6,26 @@
 
 set -euo pipefail
 
-PROJECT_PATH="${1:-.}"
+PROJECT_PATH="${1:-}"
 INITIAL_PROMPT="${2:-}"
 
-# Resolve absolute path
-PROJECT_PATH="$(cd "$PROJECT_PATH" && pwd)"
+# Default to current directory if no argument given
+if [ -z "$PROJECT_PATH" ]; then
+    PROJECT_PATH="$(pwd)"
+fi
+
+# Validate directory exists before resolving
+if [ ! -d "$PROJECT_PATH" ]; then
+    echo "ERROR: Directory '$PROJECT_PATH' does not exist."
+    exit 1
+fi
+
+# Resolve absolute path (realpath preferred, cd+pwd fallback)
+if command -v realpath > /dev/null 2>&1; then
+    PROJECT_PATH="$(realpath "$PROJECT_PATH")"
+else
+    PROJECT_PATH="$(cd "$PROJECT_PATH" && pwd)"
+fi
 CTXPILOT_DIR="$PROJECT_PATH/.ctxpilot"
 PID_FILE="$CTXPILOT_DIR/server.pid"
 PORT_FILE="$CTXPILOT_DIR/server.port"
@@ -131,6 +146,8 @@ echo ""
 echo "  Launching Codex CLI..."
 echo "  ────────────────────────"
 echo ""
+
+cd "$PROJECT_PATH"
 
 if [ -n "$INITIAL_PROMPT" ]; then
     codex "$INITIAL_PROMPT"

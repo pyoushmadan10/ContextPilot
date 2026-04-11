@@ -107,6 +107,8 @@ echo   Launching Claude Code...
 echo   ------------------------------------------------
 echo.
 
+cd /d "%PROJECT_PATH%"
+
 if not "%INITIAL_PROMPT%"=="" (
     call claude "%INITIAL_PROMPT%"
 ) else (
