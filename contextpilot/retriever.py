@@ -216,7 +216,9 @@ class ActionGraph:
 
 # Per-turn read budget (chars)
 CTX_READ_BUDGET = int(os.environ.get("CTX_READ_BUDGET", "18000"))
-CTX_TURN_GAP_SECONDS = float(os.environ.get("CTX_TURN_GAP_SECONDS", "3.0"))
+# 60s gap: long enough to survive Claude's own response time + tool call overhead
+# within one prompt, but short enough to catch a new user message.
+CTX_TURN_GAP_SECONDS = float(os.environ.get("CTX_TURN_GAP_SECONDS", "60.0"))
 
 
 def expand_with_imports(
@@ -301,6 +303,23 @@ class Retriever:
         self.action_graph.new_turn()
         self._turn_chars_read = 0
 
+    def maybe_increment_turn(self):
+        """Start a new turn if enough time has passed since the last retrieval call.
+
+        Called at the top of ctx_continue and ctx_retrieve only. Uses a 60s gap
+        so that multiple tool calls within one prompt (which complete in seconds)
+        stay in the same turn, while a new user message (which arrives after the
+        user reads and types, typically > 60s) correctly starts a new turn.
+
+        ctx_read and ctx_register_edit never call this — they don't retrieve
+        context and shouldn't advance the turn counter.
+        """
+        now = time.time()
+        gap = now - self._last_tool_call_at
+        self._last_tool_call_at = now
+        if gap > self._turn_gap:
+            self.new_turn()
+
     def _compute_raw_tokens(self, context_sent: list[dict]) -> int:
         """Compute token count of the full files referenced in context_sent.
 
@@ -333,6 +352,7 @@ class Retriever:
         total_tokens_raw: int,
         context_sent: list[dict],
         context_excluded: list[dict] | None = None,
+        tool: str = "ctx_continue",
     ) -> dict:
         """Build a traversal record for session_stats."""
         preview = query[:60] + ("..." if len(query) > 60 else "")
@@ -340,6 +360,7 @@ class Retriever:
         cost_raw = estimate_cost_usd(total_tokens_raw)
         return {
             "turn": self.action_graph.turn,
+            "tool": tool,
             "prompt_preview": preview,
             "timestamp": datetime.now(timezone.utc).isoformat(timespec="seconds"),
             "total_tokens_sent": total_tokens_sent,
@@ -364,7 +385,7 @@ class Retriever:
 
         Returns ContextResult dict.
         """
-        self.new_turn()
+        self.maybe_increment_turn()
 
         # Tier 0: Check action graph memory
         memory_files = self.action_graph.find_matching_files(query)
@@ -564,6 +585,7 @@ class Retriever:
 
         Returns RetrievalResult dict.
         """
+        self.maybe_increment_turn()
         query_vector = embed_query(query)
         tiered = self.store.search_with_tiers(query_vector, top_k)
 

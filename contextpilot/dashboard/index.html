@@ -671,7 +671,7 @@
                     <div class="sub" id="cost-saved-sub"></div>
                 </div>
                 <div class="stat-card">
-                    <div class="label">Turns</div>
+                    <div class="label">Prompts (inferred)</div>
                     <div class="value" id="turns">-</div>
                     <div class="sub" id="turns-sub"></div>
                 </div>
@@ -824,7 +824,7 @@
                                 title: function(items) {
                                     const idx = items[0].dataIndex;
                                     const t = lastTraversals[idx];
-                                    if (t) return t.prompt_preview || `Turn ${t.turn}`;
+                                    if (t) return t.prompt_preview || `Prompt ~${t.turn}`;
                                     return items[0].label;
                                 },
                                 afterBody: function(items) {
@@ -908,7 +908,7 @@
 
             document.getElementById('turns').textContent = fmtNum(turnsCount);
             const avgPerTurn = turnsCount > 0 ? Math.round(sent / turnsCount) : 0;
-            document.getElementById('turns-sub').textContent = `avg ${fmtNum(avgPerTurn)}/turn`;
+            document.getElementById('turns-sub').textContent = `avg ${fmtNum(avgPerTurn)} tok/prompt`;
 
             // Index stats
             const idx = data.index || {};
@@ -941,7 +941,7 @@
                     chartWrapper.style.width = '100%';
                 }
 
-                turnChart.data.labels = traversals.map(t => t.prompt_preview || `Turn ${t.turn}`);
+                turnChart.data.labels = traversals.map(t => t.prompt_preview || `Prompt ~${t.turn}`);
                 turnChart.data.datasets[0].data = traversals.map(t => t.total_tokens_sent || 0);
                 turnChart.data.datasets[1].data = traversals.map(t => t.total_tokens_raw || 0);
             } else if (turns && turns.length > 0) {
@@ -953,7 +953,7 @@
                 } else {
                     chartWrapper.style.width = '100%';
                 }
-                turnChart.data.labels = turns.map(t => `Turn ${t.turn}`);
+                turnChart.data.labels = turns.map(t => `Prompt ~${t.turn}`);
                 turnChart.data.datasets[0].data = turns.map(t => t.tokens_sent);
                 turnChart.data.datasets[1].data = turns.map(t => t.tokens_raw);
             }
@@ -1079,12 +1079,18 @@
                 excludedHtml += '</div>';
             }
 
+            const toolLabel = trav.tool || 'ctx_continue';
+            const toolColor = toolLabel === 'ctx_retrieve'
+                ? 'background:var(--color-background-warning);color:var(--color-text-warning)'
+                : 'background:var(--color-background-info);color:var(--color-text-info)';
+
             card.innerHTML = `
                 <div class="prompt-header" onclick="this.parentElement.classList.toggle('expanded')">
                     <div class="hover-tooltip">Saved: $${savedCost.toFixed(4)} (${fmtNum(savedTok)} tok · ${savePct}%)</div>
                     <div class="prompt-header-left">
                         <div class="prompt-turn-info">
-                            <span class="prompt-turn-num">Turn ${trav.turn || '?'}</span>
+                            <span class="prompt-turn-num">Prompt ~${trav.turn || '?'} <span style="font-size:10px;font-weight:400;color:var(--text-dim)">(inferred)</span></span>
+                            <span style="padding:2px 7px;border-radius:5px;font-size:10px;font-weight:600;${toolColor}">${escapeHtml(toolLabel)}</span>
                             <span>${ts}</span>
                         </div>
                         <div class="prompt-preview">${escapeHtml(trav.prompt_preview || '')}</div>
