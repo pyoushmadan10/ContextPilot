@@ -301,19 +301,26 @@ class Retriever:
         self.action_graph.new_turn()
         self._turn_chars_read = 0
 
-    def maybe_increment_turn(self):
-        """Increment the turn counter if enough time has elapsed.
+    def _compute_raw_tokens(self, context_sent: list[dict]) -> int:
+        """Compute token count of the full files referenced in context_sent.
 
-        Called at the top of every MCP tool. If the gap between now and
-        the previous tool call exceeds CTX_TURN_GAP_SECONDS (default 3s),
-        we treat this as a new user prompt and advance the turn.
+        This is what would have been sent without ContextPilot — reading
+        entire files instead of surgical symbol extraction.
         """
-        now = time.time()
-        gap = now - self._last_tool_call_at
-        self._last_tool_call_at = now
-
-        if gap > self._turn_gap:
-            self.new_turn()
+        files = {item.get("file", "") for item in context_sent if item.get("file")}
+        total = 0
+        for fp in files:
+            if not fp:
+                continue
+            abs_path = self.project_root / fp
+            try:
+                content = abs_path.read_text(encoding="utf-8", errors="replace")
+                total += count_tokens(content)
+            except OSError:
+                # File unreadable — fall back to sum of all its indexed symbols
+                file_syms = self.store.find_symbols_by_file(fp)
+                total += sum(count_tokens(s.get("body_preview", "")) for s in file_syms) * 2
+        return max(total, 1)
 
     # ------------------------------------------------------------------
     # Traversal record builder
@@ -357,7 +364,7 @@ class Retriever:
 
         Returns ContextResult dict.
         """
-        self.maybe_increment_turn()
+        self.new_turn()
 
         # Tier 0: Check action graph memory
         memory_files = self.action_graph.find_matching_files(query)
@@ -404,7 +411,7 @@ class Retriever:
                     })
 
                 tokens_sent = total_tokens + tokens_neighbors
-                tokens_raw = tokens_sent * 5  # Estimate: full-file ~5x
+                tokens_raw = self._compute_raw_tokens(ctx_sent)
                 traversal = self._build_traversal_record(
                     query, tokens_sent, tokens_raw, ctx_sent
                 )
@@ -527,7 +534,7 @@ class Retriever:
                 })
 
         tokens_sent = primary_tokens + summary_tokens + tokens_neighbors
-        tokens_raw = tokens_sent * 5  # Estimate: full-file ~5x
+        tokens_raw = self._compute_raw_tokens(ctx_sent)
         traversal = self._build_traversal_record(
             query, tokens_sent, tokens_raw, ctx_sent, ctx_excluded
         )
@@ -557,7 +564,6 @@ class Retriever:
 
         Returns RetrievalResult dict.
         """
-        self.maybe_increment_turn()
         query_vector = embed_query(query)
         tiered = self.store.search_with_tiers(query_vector, top_k)
 
@@ -578,10 +584,15 @@ class Retriever:
             neighbor_files, self.store, primary_tokens
         )
 
-        # Estimate tokens saved: rough estimate of what full-file read would cost
-        full_tokens = primary_tokens + summary_tokens + tokens_neighbors
-        # Assume sending full files would be ~5x the symbol-level tokens
-        tokens_saved = max(0, full_tokens * 4)
+        # Compute actual tokens saved vs sending entire files
+        all_files = {
+            *(s.get("file_path", "") for s in tiered["primary"] if s.get("file_path")),
+            *(s.get("file_path", "") for s in tiered["summaries"] if s.get("file_path")),
+        }
+        ctx_sent_stub = [{"file": f} for f in all_files]
+        tokens_raw_full = self._compute_raw_tokens(ctx_sent_stub)
+        tokens_sent_total = primary_tokens + summary_tokens + tokens_neighbors
+        tokens_saved = max(0, tokens_raw_full - tokens_sent_total)
 
         self.action_graph.record_query(query, "semantic_search")
 
@@ -608,7 +619,6 @@ class Retriever:
 
         Returns ReadResult dict.
         """
-        self.maybe_increment_turn()
         abs_path = self.project_root / file_path
 
         if not abs_path.exists():
@@ -719,7 +729,6 @@ class Retriever:
 
         Returns edit result dict.
         """
-        self.maybe_increment_turn()
         from contextpilot.scanner import scan_file
 
         self.action_graph.record_edit(file_path, summary)

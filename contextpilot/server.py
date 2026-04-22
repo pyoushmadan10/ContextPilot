@@ -92,15 +92,9 @@ def ctx_continue(query: str) -> dict:
 
     result = _retriever.ctx_continue(query)
 
-    # Run cost guard on the context
-    tokens_sent = result.get("total_tokens", 0)
-    tokens_raw = tokens_sent * 5  # Estimate: full-file would be ~5x
-
     if _cost_guard:
-        # Build context text for token estimation
-        context_parts = []
-        for s in result.get("symbols", []):
-            context_parts.append(s.get("body_preview", ""))
+        # Build context text for cost guard check
+        context_parts = [s.get("body_preview", "") for s in result.get("symbols", [])]
         context_text = "\n\n".join(context_parts)
         guard_result = _cost_guard.check(context_text)
 
@@ -120,15 +114,16 @@ def ctx_continue(query: str) -> dict:
                 "tokens_saved": compressed["tokens_saved"],
                 "quality_report": compressed["quality_report"],
             }
-            tokens_sent = compressed["compressed_tokens"]
 
     if _session_stats:
-        _session_stats.record_turn(tokens_raw, tokens_sent, _retriever.action_graph.turn)
-        # Record traversal if present
         traversal = result.pop("_traversal", None)
         if traversal:
             _session_stats.record_traversal(traversal)
-            # Print cost line to stderr with flush for tail -f
+            _session_stats.record_turn(
+                traversal.get("total_tokens_raw", 0),
+                traversal.get("total_tokens_sent", 0),
+                _retriever.action_graph.turn,
+            )
             saved_tok = traversal.get("total_tokens_raw", 0) - traversal.get("total_tokens_sent", 0)
             cost_saved = traversal.get("cost_raw_would_have_been_usd", 0) - traversal.get("cost_this_turn_usd", 0)
             print(
@@ -164,40 +159,18 @@ def ctx_retrieve(query: str, top_k: int = 10) -> dict:
     result = _retriever.ctx_retrieve(query, top_k)
 
     # Attach cost info
-    if _cost_guard:
-        total_tokens = (
-            result.get("tokens_primary", 0)
-            + result.get("tokens_summary", 0)
-            + result.get("tokens_neighbors", 0)
-        )
-        result["cost"] = {
-            "total_tokens": total_tokens,
-            "estimated_cost_usd": estimate_cost_usd(total_tokens),
-        }
-        
-        if _session_stats:
-            tokens_sent = total_tokens
-            tokens_raw = tokens_sent * 5  # Estimate
-            _session_stats.record_turn(tokens_raw, tokens_sent, _retriever.action_graph.turn)
-            # Record traversal if present
-            traversal = result.pop("_traversal", None)
-            if traversal:
-                _session_stats.record_traversal(traversal)
-                # Print cost line to stderr with flush for tail -f
-                saved_tok = traversal.get("total_tokens_raw", 0) - traversal.get("total_tokens_sent", 0)
-                cost_saved = traversal.get("cost_raw_would_have_been_usd", 0) - traversal.get("cost_this_turn_usd", 0)
-                print(
-                    f"[ContextPilot] Turn {traversal.get('turn', '?')} \u2014 "
-                    f"sent {traversal.get('total_tokens_sent', 0):,} tok "
-                    f"(${traversal.get('cost_this_turn_usd', 0):.3f}) \u00b7 "
-                    f"saved {saved_tok:,} tok (${cost_saved:.3f})",
-                    file=sys.stderr, flush=True,
-                )
+    total_tokens = (
+        result.get("tokens_primary", 0)
+        + result.get("tokens_summary", 0)
+        + result.get("tokens_neighbors", 0)
+    )
+    result["cost"] = {
+        "total_tokens": total_tokens,
+        "estimated_cost_usd": estimate_cost_usd(total_tokens),
+        "tokens_saved": result.get("tokens_saved", 0),
+    }
 
-    return result
-
-
-@mcp.tool()
+    return resultmcp.tool()
 def ctx_read(file_path: str, symbol_name: str | None = None) -> dict:
     """Read a file or specific symbol from the project.
 
@@ -219,11 +192,6 @@ def ctx_read(file_path: str, symbol_name: str | None = None) -> dict:
 
     result = _retriever.ctx_read(file_path, symbol_name)
     
-    if _session_stats and not result.get("error"):
-        tokens_sent = result.get("tokens", 0)
-        tokens_raw = tokens_sent * 5  # Estimate
-        _session_stats.record_turn(tokens_raw, tokens_sent, _retriever.action_graph.turn)
-        
     return result
 
 
