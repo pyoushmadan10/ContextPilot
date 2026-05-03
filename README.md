@@ -321,7 +321,7 @@ uv pip install -e ".[dev]"
 pytest tests/ -v   # Make sure everything passes first
 ```
 
-See [CONTRIBUTING.md](../CONTRIBUTING.md) for the full guide: setup, coding conventions, and the PR checklist.
+See [CONTRIBUTING.md](CONTRIBUTING.md) for the full guide: setup, coding conventions, and the PR checklist.
 
 ## License
 

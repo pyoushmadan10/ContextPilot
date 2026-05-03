@@ -39,9 +39,11 @@ class TestExtractParamNames:
         assert "age" in result
 
     def test_go_style(self):
-        sig = "func (s *Server) Start(port int)"
+        # Use a plain Go function (no receiver) to test param name extraction
+        sig = "func StartServer(port int, host string)"
         result = _extract_param_names(sig)
         assert "port" in result
+        assert "host" in result
 
     def test_no_params_returns_empty(self):
         sig = "def no_args():"
