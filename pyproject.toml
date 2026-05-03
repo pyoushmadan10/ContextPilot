@@ -21,6 +21,12 @@ dependencies = [
     "pathspec>=1.0.4",
 ]
 
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0",
+    "pytest-cov>=5.0",
+]
+
 [project.scripts]
 contextpilot = "contextpilot.server:main"
 

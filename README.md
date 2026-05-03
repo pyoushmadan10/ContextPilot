@@ -281,12 +281,47 @@ Typical savings observed during development:
 | Reduction | **60–80%** |
 | Cost savings at $3/1M | ~$0.01–0.02 per turn |
 
-## 🧪 Manual Verification Checklist
+## 🧪 Tests
 
-1. Run scan twice and confirm second run indexes 0 changed files.
-2. Edit one source file and call `ctx_register_edit` to confirm single-file re-index.
-3. Query `ctx_retrieve("authentication logic")` and verify relevant symbols appear.
-4. Open `/dashboard` and `/stats` and confirm turn stats update during tool usage.
+ContextPilot has a fast, self-contained test suite (~5 seconds). It mocks the fastembed model with deterministic fake vectors — no GPU, no model download required.
+
+```bash
+# Install dev dependencies
+uv pip install -e ".[dev]"
+
+# Run all tests
+pytest tests/ -v
+
+# Run with coverage
+pytest tests/ --cov=contextpilot --cov-report=term-missing
+```
+
+The suite covers:
+
+| Module | What's tested |
+|--------|--------------|
+| `store.py` | Symbol CRUD, KNN search tiers, import edges, summaries |
+| `retriever.py` | ActionGraph memory, three-tier resolution, read budget |
+| `summarizer.py` | Param extraction, CliffNotes formatting |
+| `compressor.py` | Boilerplate detection, budget cuts, quality report |
+| `cost_guard.py` | Token estimation, warn/interrupt thresholds, SessionSavings |
+
+CI runs automatically on every push and pull request to `main` via GitHub Actions.
+
+## 🤝 Contributing
+
+ContextPilot is open source and welcomes contributions! Whether it's a bug fix, a new language (Rust, Java, C++), a performance improvement, or better docs — all PRs are appreciated.
+
+**Quick start:**
+
+```bash
+git clone https://github.com/<your-username>/ContextPilot.git
+cd ContextPilot/contextpilot
+uv pip install -e ".[dev]"
+pytest tests/ -v   # Make sure everything passes first
+```
+
+See [CONTRIBUTING.md](../CONTRIBUTING.md) for the full guide: setup, coding conventions, and the PR checklist.
 
 ## License
 
