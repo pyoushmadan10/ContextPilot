@@ -763,7 +763,8 @@
     <script>
         // ---- State ----
         let turnChart = null;
-        let renderedTraversalCount = 0;
+        let renderedTurns = new Set();
+        let currentSessionStart = null;
         let lastTraversals = []; // cached for chart
 
         // ---- Tab switching ----
@@ -997,26 +998,33 @@
             const emptyEl = document.getElementById('traversal-empty');
             const listEl = document.getElementById('traversal-list');
 
+            // Detect session restart
+            if (data.session_start && data.session_start !== currentSessionStart) {
+                currentSessionStart = data.session_start;
+                renderedTurns.clear();
+                // Remove all existing prompt cards
+                const cards = listEl.querySelectorAll('.prompt-card');
+                cards.forEach(c => c.remove());
+            }
+
             if (traversals.length === 0) {
                 emptyEl.style.display = 'block';
                 return;
             }
             emptyEl.style.display = 'none';
 
-            // Only add new cards (newest first = prepend)
-            if (traversals.length > renderedTraversalCount) {
-                const newItems = traversals.slice(renderedTraversalCount);
-                for (const trav of newItems) {
+            // Add new cards (newest first = prepend by inserting after empty state)
+            for (const trav of traversals) {
+                if (trav.turn !== undefined && !renderedTurns.has(trav.turn)) {
                     const card = renderPromptCard(trav);
-                    // Insert after tier legend but before existing cards
                     if (listEl.children.length <= 1) {
                         listEl.appendChild(card);
                     } else {
                         // Insert after empty state div (index 0)
                         listEl.insertBefore(card, emptyEl.nextSibling);
                     }
+                    renderedTurns.add(trav.turn);
                 }
-                renderedTraversalCount = traversals.length;
             }
         }
 

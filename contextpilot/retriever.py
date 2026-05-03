@@ -75,7 +75,11 @@ class ActionGraph:
                 with open(self._path, "r", encoding="utf-8") as f:
                     saved = json.load(f)
                 self._data.update(saved)
-                self._turn = len(self._data.get("turns", []))
+                # Keep files_read/files_edited/queries for memory continuity,
+                # but always start the turn counter fresh for this server session
+                # so the traversal tab's "Prompt ~N" matches the stats tab count.
+                self._data["turns"] = []
+                self._turn = 0
             except (json.JSONDecodeError, OSError):
                 pass
 
