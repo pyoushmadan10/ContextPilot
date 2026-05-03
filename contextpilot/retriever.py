@@ -405,6 +405,9 @@ class Retriever:
                 )
 
                 self.action_graph.record_query(query, "memory_first")
+                # Record reads for all accessed files so dashboard top_files is updated
+                for fp in memory_files[:5]:
+                    self.action_graph.record_read(fp)
 
                 # Build traversal context_sent for memory hits
                 ctx_sent = []
@@ -454,6 +457,10 @@ class Retriever:
         if file_results:
             total_tokens = sum(count_tokens(s.get("body_preview", "")) for s in file_results)
             self.action_graph.record_query(query, "file_path_match")
+            # Record reads for accessed files
+            accessed_files = {s.get("file_path", "") for s in file_results if s.get("file_path")}
+            for fp in accessed_files:
+                self.action_graph.record_read(fp)
             return {
                 "mode": "file_path_match",
                 "confidence": "high",
@@ -468,6 +475,10 @@ class Retriever:
         if name_results:
             total_tokens = sum(count_tokens(s.get("body_preview", "")) for s in name_results)
             self.action_graph.record_query(query, "symbol_name_match")
+            # Record reads for accessed files
+            accessed_files = {s.get("file_path", "") for s in name_results if s.get("file_path")}
+            for fp in accessed_files:
+                self.action_graph.record_read(fp)
             return {
                 "mode": "symbol_name_match",
                 "confidence": "high",
@@ -503,6 +514,13 @@ class Retriever:
         )
 
         self.action_graph.record_query(query, "semantic_search")
+        # Record reads for all files accessed via semantic search
+        accessed_files = {
+            *(s.get("file_path", "") for s in tiered["primary"] if s.get("file_path")),
+            *(s.get("file_path", "") for s in tiered["summaries"] if s.get("file_path")),
+        }
+        for fp in accessed_files:
+            self.action_graph.record_read(fp)
 
         # Build traversal record
         ctx_sent = []
