@@ -134,10 +134,10 @@ claude mcp add --transport http contextpilot http://localhost:<port>/mcp
 Codex CLI:
 
 ```bash
-codex mcp add --transport http contextpilot http://localhost:<port>/mcp
+codex mcp add contextpilot --url http://localhost:<port>/mcp
 ```
 
-> **Note:** The `--transport http` flag is required because ContextPilot uses streamable-http transport, not stdio. Without it, the CLI defaults to stdio and the connection will fail.
+> **Note:** For Claude CLI, the `--transport http` flag is required (it defaults to stdio). For Codex CLI, use `--url` instead.
 
 Cursor / Antigravity:
 
@@ -221,7 +221,8 @@ contextpilot/
 ├── bin/
 │   ├── cpx              # Claude Code launcher (bash)
 │   ├── cpx-codex        # Codex CLI launcher (bash)
-│   └── cpx.cmd          # Windows launcher
+│   ├── cpx.cmd          # Claude Code launcher (Windows)
+│   └── cpx-codex.cmd    # Codex CLI launcher (Windows)
 └── contextpilot/
     ├── __main__.py       # CLI dispatcher (serve/scan/stats)
     ├── server.py         # FastMCP server + HTTP endpoints

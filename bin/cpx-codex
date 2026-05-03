@@ -63,26 +63,33 @@ echo $SERVER_PID > "$CTXPILOT_DIR/server.pid"
 disown $SERVER_PID
 
 # Wait for HTTP server to be reachable
-MAX_WAIT=30
+MAX_WAIT=90
 WAITED=0
 
 while [ $WAITED -lt $MAX_WAIT ]; do
   if [ -f "$PORT_FILE" ]; then
     PORT=$(cat "$PORT_FILE")
     if curl -s "http://localhost:$PORT/health" > /dev/null 2>&1; then
+      if [ $WAITED -ge 5 ]; then
+        echo ""
+      fi
       echo "  ContextPilot server is up (indexing may continue in background)"
       echo "  Dashboard: http://localhost:$PORT/dashboard"
       break
     fi
   fi
   if [ $WAITED -eq 5 ]; then
-    echo "  Waiting for server to start..."
+    printf "  Waiting for server (setting up dependencies may take a moment)"
+  fi
+  if [ $WAITED -gt 5 ]; then
+    printf "."
   fi
   sleep 1
   WAITED=$((WAITED + 1))
 done
 
 if [ $WAITED -eq $MAX_WAIT ]; then
+  echo ""
   echo "  ContextPilot server failed to start. Check .ctxpilot/server.log for details."
   exit 1
 fi
@@ -94,14 +101,14 @@ DASHBOARD_URL="http://localhost:${PORT}/dashboard"
 echo ""
 
 echo "  Registering MCP server with Codex CLI..."
-if codex mcp add --transport http contextpilot "$MCP_URL" 2>/dev/null; then
+if codex mcp add contextpilot --url "$MCP_URL" 2>/dev/null; then
     echo "  MCP server registered successfully."
 else
     echo ""
     echo "  ⚠  Could not auto-register MCP server with 'codex' CLI."
     echo "  Run this command manually to register:"
     echo ""
-    echo "    codex mcp add --transport http contextpilot $MCP_URL"
+    echo "    codex mcp add contextpilot --url $MCP_URL"
     echo ""
 fi
 

@@ -84,6 +84,8 @@ if (-not (Test-Path $binDir)) {
 
 Copy-Item "$ScriptDir\bin\cpx.cmd" "$binDir\cpx.cmd" -Force
 Write-Host "  OK: Launcher installed to $binDir\cpx.cmd" -ForegroundColor Green
+Copy-Item "$ScriptDir\bin\cpx-codex.cmd" "$binDir\cpx-codex.cmd" -Force
+Write-Host "  OK: Launcher installed to $binDir\cpx-codex.cmd" -ForegroundColor Green
 
 # ---- Add to PATH if needed ----
 $currentPath = [Environment]::GetEnvironmentVariable("Path", "User")
@@ -105,7 +107,8 @@ Write-Host "================================================" -ForegroundColor G
 Write-Host "  ContextPilot installed successfully!" -ForegroundColor Green
 Write-Host ""
 Write-Host "  Usage:"
-Write-Host "    cpx C:\path\to\project        # Launch with Claude Code"
+Write-Host "    cpx C:\path\to\project              # Launch with Claude Code"
+Write-Host "    cpx-codex C:\path\to\project        # Launch with Codex CLI"
 Write-Host ""
 Write-Host "  The MCP server will:"
 Write-Host "    1. Scan and index your project"
