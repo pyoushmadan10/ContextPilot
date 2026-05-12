@@ -218,8 +218,8 @@ class ActionGraph:
 # Retriever — the core retrieval engine
 # ---------------------------------------------------------------------------
 
-# Per-turn read budget (chars)
-CTX_READ_BUDGET = int(os.environ.get("CTX_READ_BUDGET", "18000"))
+# Per-turn read budget (chars) — soft limit, gracefully truncates when exceeded
+CTX_READ_BUDGET = int(os.environ.get("CTX_READ_BUDGET", "80000"))
 # 60s gap: long enough to survive Claude's own response time + tool call overhead
 # within one prompt, but short enough to catch a new user message.
 CTX_TURN_GAP_SECONDS = float(os.environ.get("CTX_TURN_GAP_SECONDS", "60.0"))
@@ -696,17 +696,16 @@ class Retriever:
                         stale = cs.body_hash != target["body_hash"]
                         break
 
-                # Budget check
+                # Soft budget check — truncate instead of blocking
                 if self._turn_chars_read + len(content) > CTX_READ_BUDGET:
-                    return {
-                        "error": f"Read budget exceeded ({self._turn_chars_read}/{CTX_READ_BUDGET} chars used). "
-                                 f"Symbol '{symbol_name}' would add {len(content)} chars.",
-                        "content": "",
-                        "tokens": 0,
-                        "from_cache": True,
-                        "stale": stale,
-                        "budget_remaining": CTX_READ_BUDGET - self._turn_chars_read,
-                    }
+                    remaining = max(0, CTX_READ_BUDGET - self._turn_chars_read)
+                    if remaining > 200:
+                        # Truncate content to fit remaining budget
+                        content = content[:remaining] + f"\n... [truncated, {len(content) - remaining} chars omitted]"
+                    else:
+                        # Very little budget left — return just the signature
+                        sig = target.get("signature", "") or content[:200]
+                        content = sig + f"\n... [budget low: returning signature only]\n"
 
                 self._turn_chars_read += len(content)
                 self.action_graph.record_read(file_path)
@@ -740,17 +739,19 @@ class Retriever:
                     "stale": False,
                 }
 
-            # Budget check
+            # Soft budget check — truncate instead of blocking
             if self._turn_chars_read + len(content) > CTX_READ_BUDGET:
-                return {
-                    "error": f"Read budget exceeded ({self._turn_chars_read}/{CTX_READ_BUDGET} chars used). "
-                             f"File '{file_path}' is {len(content)} chars.",
-                    "content": "",
-                    "tokens": 0,
-                    "from_cache": False,
-                    "stale": False,
-                    "budget_remaining": CTX_READ_BUDGET - self._turn_chars_read,
-                }
+                remaining = max(0, CTX_READ_BUDGET - self._turn_chars_read)
+                if remaining > 200:
+                    # Truncate content to fit remaining budget
+                    content = content[:remaining] + f"\n... [truncated, {len(content) - remaining} chars omitted]"
+                else:
+                    # Very little budget left — return summary from index if available
+                    summary = self.store.get_summary(file_path)
+                    if summary:
+                        content = f"[Budget low — returning indexed summary]\n{summary}"
+                    else:
+                        content = content[:500] + f"\n... [truncated, {len(content) - 500} chars omitted]"
 
             tokens = count_tokens(content)
             self._turn_chars_read += len(content)

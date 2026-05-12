@@ -180,8 +180,9 @@ def ctx_read(file_path: str, symbol_name: str | None = None) -> dict:
     If symbol_name is provided, returns only that symbol's body (not the
     whole file), saving tokens.
 
-    Enforces a per-turn read budget (default 18,000 chars) to prevent
-    excessive context consumption.
+    Enforces a soft per-turn read budget (default 80,000 chars). When exceeded,
+    content is gracefully truncated instead of blocked, so the AI always gets
+    useful context.
 
     Args:
         file_path: Relative path from project root.

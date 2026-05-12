@@ -30,9 +30,9 @@ from contextpilot.summarizer import generate_summary
 # Configuration
 # ---------------------------------------------------------------------------
 
-# Max file size to index (default 500KB) — larger files are usually
+# Max file size to index (default 2MB) — larger files are usually
 # generated/minified and not useful for context
-MAX_FILE_SIZE = int(os.environ.get("CTX_MAX_FILE_SIZE", str(500 * 1024)))
+MAX_FILE_SIZE = int(os.environ.get("CTX_MAX_FILE_SIZE", str(2 * 1024 * 1024)))
 
 # Embedding batch size and worker count
 EMBED_BATCH_SIZE = 50
