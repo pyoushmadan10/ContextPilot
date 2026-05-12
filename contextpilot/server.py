@@ -170,7 +170,10 @@ def ctx_retrieve(query: str, top_k: int = 10) -> dict:
         "tokens_saved": result.get("tokens_saved", 0),
     }
 
-    return resultmcp.tool()
+    return result
+
+
+@mcp.tool()
 def ctx_read(file_path: str, symbol_name: str | None = None) -> dict:
     """Read a file or specific symbol from the project.
 

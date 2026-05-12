@@ -81,13 +81,15 @@ echo.
 
 REM Register MCP server with Claude Code
 echo   Registering MCP server with Claude Code...
-call claude mcp add --transport http contextpilot "%MCP_URL%" >nul 2>&1
+REM Remove any stale registration first (ignore errors if it doesn't exist)
+call claude mcp remove contextpilot >nul 2>&1
+call claude mcp add --transport http contextpilot "%MCP_URL%"
 if errorlevel 1 (
     echo.
     echo   WARNING: Could not auto-register MCP server with 'claude' CLI.
     echo   Run this command manually to register:
     echo.
-    echo     claude mcp add --transport http contextpilot %MCP_URL%
+    echo     claude mcp remove contextpilot 2^>nul ^& claude mcp add --transport http contextpilot %MCP_URL%
     echo.
 ) else (
     echo   MCP server registered successfully.

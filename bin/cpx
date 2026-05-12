@@ -104,14 +104,16 @@ echo ""
 
 # Register MCP server with Claude Code
 echo "  Registering MCP server with Claude Code..."
-if claude mcp add --transport http contextpilot "$MCP_URL" 2>/dev/null; then
+# Remove any stale registration first (ignore errors if it doesn't exist)
+claude mcp remove contextpilot 2>/dev/null || true
+if claude mcp add --transport http contextpilot "$MCP_URL"; then
     echo "  MCP server registered successfully."
 else
     echo ""
     echo "  ⚠  Could not auto-register MCP server with 'claude' CLI."
     echo "  Run this command manually to register:"
     echo ""
-    echo "    claude mcp add --transport http contextpilot $MCP_URL"
+    echo "    claude mcp remove contextpilot 2>/dev/null; claude mcp add --transport http contextpilot $MCP_URL"
     echo ""
 fi
 
