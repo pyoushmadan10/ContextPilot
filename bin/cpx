@@ -32,6 +32,12 @@ if command -v realpath > /dev/null 2>&1; then
 else
     PROJECT_PATH="$(cd "$PROJECT_PATH" && pwd)"
 fi
+
+# Resolve the directory where this script lives (bin/ inside contextpilot source)
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+# contextpilot source root is one level up from bin/
+CONTEXTPILOT_SRC="$(cd "$SCRIPT_DIR/.." && pwd)"
+
 CTXPILOT_DIR="$PROJECT_PATH/.ctxpilot"
 PID_FILE="$CTXPILOT_DIR/server.pid"
 PORT_FILE="$CTXPILOT_DIR/server.port"
@@ -61,20 +67,32 @@ mkdir -p "$CTXPILOT_DIR"
 touch "$LOG_FILE"
 
 # Start server in background completely detached
+# Run from the contextpilot source directory so uv can find pyproject.toml
 echo "  Starting ContextPilot..."
-nohup uv run python -m contextpilot.server "$PROJECT_PATH" \
+(cd "$CONTEXTPILOT_SRC" && nohup uv run python -m contextpilot.server "$PROJECT_PATH" \
   >> "$LOG_FILE" 2>&1 &
+  echo $! > "$CTXPILOT_DIR/server.pid"
+)
 
-SERVER_PID=$!
-echo $SERVER_PID > "$CTXPILOT_DIR/server.pid"
-disown $SERVER_PID
+# Read server PID back
+SERVER_PID=$(cat "$CTXPILOT_DIR/server.pid" 2>/dev/null || echo "")
 
 # Wait for HTTP server to be reachable (not for scan to complete)
 MAX_WAIT=30
 WAITED=0
 
 while [ $WAITED -lt $MAX_WAIT ]; do
-  # First check if port file exists so we know what port to curl
+  # Check if server process is still alive
+  if [ -n "$SERVER_PID" ] && ! kill -0 "$SERVER_PID" 2>/dev/null; then
+    echo ""
+    echo "  ContextPilot server process exited unexpectedly."
+    echo "  Last 15 lines of server log:"
+    echo "  ─────────────────────────────"
+    tail -15 "$LOG_FILE" 2>/dev/null | sed 's/^/    /'
+    exit 1
+  fi
+
+  # Check if port file exists so we know what port to curl
   if [ -f "$PORT_FILE" ]; then
     PORT=$(cat "$PORT_FILE")
     if curl -s "http://localhost:$PORT/health" > /dev/null 2>&1; then
@@ -92,7 +110,11 @@ while [ $WAITED -lt $MAX_WAIT ]; do
 done
 
 if [ $WAITED -eq $MAX_WAIT ]; then
-  echo "  ContextPilot server failed to start. Check .ctxpilot/server.log for details."
+  echo ""
+  echo "  ContextPilot server failed to start within ${MAX_WAIT}s."
+  echo "  Last 15 lines of server log:"
+  echo "  ─────────────────────────────"
+  tail -15 "$LOG_FILE" 2>/dev/null | sed 's/^/    /'
   exit 1
 fi
 
@@ -145,7 +167,7 @@ fi
 cleanup() {
     echo ""
     echo "  Stopping ContextPilot server..."
-    if kill -0 "$SERVER_PID" 2>/dev/null; then
+    if [ -n "$SERVER_PID" ] && kill -0 "$SERVER_PID" 2>/dev/null; then
         kill "$SERVER_PID" 2>/dev/null || true
     fi
     if [ -n "$TAIL_PID" ] && kill -0 "$TAIL_PID" 2>/dev/null; then
